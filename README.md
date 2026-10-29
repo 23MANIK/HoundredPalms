@@ -52,13 +52,14 @@ Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgr
 | `SESSION_SECRET` | Yes | At least 32 random characters, signs login cookies |
 | `APP_URL` | Yes in production | Public address, used in QR codes and Google sign-in |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | For Google sign-in | The Google button is hidden without them |
-| `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | For mobile OTP | Mobile login is hidden on the live site without them |
+| `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | For OTP by SMS | Without them, guests get their code from the waiter's screen instead |
 | `BLOB_READ_WRITE_TOKEN` | For photo upload | Vercel Blob; without it, managers paste a photo link |
 | `DEV_SHOW_OTP=1` | Development only | Shows the OTP on screen; ignored on the live site |
 
 ## Security
 
 - Staff sign in with mobile number and a 4 to 6 digit PIN, hashed with scrypt. Five wrong PINs lock the account for 15 minutes.
+- Guests can always ask for their code from the waiter: it appears on the waiter's Orders screen with the table and the last 4 digits of the number, and disappears once used, after 5 wrong tries, or when it expires.
 - OTPs expire in 5 minutes, allow 5 tries, and are limited to 3 per number per 10 minutes and 10 per device per hour.
 - Login cookies are signed, HTTP-only, and `SameSite=Lax`. Every write must be JSON from the same site, which blocks cross-site form attacks.
 - Each staff action checks the person's role on the server, not only in the screen.

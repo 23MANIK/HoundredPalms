@@ -109,6 +109,10 @@ export const otpCodes = pgTable(
     codeHash: text("code_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     attempts: integer("attempts").notNull().default(0),
+    // Set when the guest asked for the code from their waiter instead of SMS.
+    // The waiter's screen shows waiterCode until it is used or expires.
+    tableId: integer("table_id").references(() => diningTables.id),
+    waiterCode: text("waiter_code"),
     usedAt: timestamp("used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

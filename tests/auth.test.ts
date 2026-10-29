@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { closeDb } from "@/db";
-import { createOtp, normalizeIndianPhone, readSession, signSession, staffLogin, verifyOtp } from "@/lib/auth";
+import { createOtp, listWaiterCodes, normalizeIndianPhone, readSession, signSession, staffLogin, verifyOtp } from "@/lib/auth";
 import { fixture } from "./helpers";
 
 let f: Awaited<ReturnType<typeof fixture>>;
@@ -39,6 +39,32 @@ describe("OTP", () => {
   it("limits code requests to 3 per 10 minutes", async () => {
     for (let i = 0; i < 3; i++) await createOtp(f.db, "+919876543212");
     await expect(createOtp(f.db, "+919876543212")).rejects.toThrow(/Too many/);
+  });
+});
+
+describe("code from the waiter", () => {
+  it("shows the code to staff until the guest uses it", async () => {
+    const code = await createOtp(f.db, "+919876543213", null, f.table.id);
+    const shown = await listWaiterCodes(f.db);
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatchObject({ code, phoneLast4: "3213", table: { number: 7 } });
+    await verifyOtp(f.db, "+919876543213", code);
+    expect(await listWaiterCodes(f.db)).toHaveLength(0);
+  });
+
+  it("shows only the newest code per number, and never SMS codes", async () => {
+    await createOtp(f.db, "+919876543214");
+    await createOtp(f.db, "+919876543214", null, f.table.id);
+    const newest = await createOtp(f.db, "+919876543214", null, f.table.id);
+    const shown = await listWaiterCodes(f.db);
+    expect(shown.map((c) => c.code)).toEqual([newest]);
+  });
+
+  it("hides a code after 5 wrong tries", async () => {
+    const code = await createOtp(f.db, "+919876543215", null, f.table.id);
+    const wrong = code === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 5; i++) await expect(verifyOtp(f.db, "+919876543215", wrong)).rejects.toThrow(/not right/);
+    expect(await listWaiterCodes(f.db)).toHaveLength(0);
   });
 });
 

@@ -44,7 +44,7 @@ type Props = {
   menu: Category[];
   guest: { id: number; name: string } | null;
   gstRateBp: number;
-  login: { google: boolean; phone: boolean };
+  login: { google: boolean; sms: boolean };
   loginFailed: boolean;
 };
 
