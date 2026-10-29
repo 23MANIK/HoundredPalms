@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import type { DB } from "@/db";
-import { guests, otpCodes, staff, auditLog } from "@/db/schema";
+import { guests, otpCodes, staff, auditLog, diningTables, restaurants } from "@/db/schema";
 import { DomainError, type GuestActor, type StaffActor } from "./domain";
 import { newOtp, sha256, verifyPin } from "./crypto";
 
@@ -79,7 +79,11 @@ function otpHash(phone: string, code: string) {
 
 const OTP_MAX_PER_IP_HOUR = 10;
 
-export async function createOtp(db: DB, phone: string, ip: string | null = null): Promise<string> {
+/**
+ * Creates a login code. With `tableId`, the code is meant for the waiter to
+ * read out: it is kept (for 5 minutes, until used) so staff screens can show it.
+ */
+export async function createOtp(db: DB, phone: string, ip: string | null = null, tableId: number | null = null): Promise<string> {
   if (ip) {
     // Stops one device from sending SMS to many numbers (each SMS costs money).
     const hourAgo = new Date(Date.now() - 3600_000);
@@ -94,8 +98,39 @@ export async function createOtp(db: DB, phone: string, ip: string | null = null)
     throw new DomainError("Too many codes requested. Please wait 10 minutes and try again.", 429);
   }
   const code = newOtp();
-  await db.insert(otpCodes).values({ phone, ip, codeHash: otpHash(phone, code), expiresAt: new Date(Date.now() + OTP_TTL_MS) });
+  await db.insert(otpCodes).values({
+    phone,
+    ip,
+    codeHash: otpHash(phone, code),
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+    tableId,
+    waiterCode: tableId ? code : null,
+  });
   return code;
+}
+
+/** Codes guests are waiting to get from a waiter, newest first. Staff only. */
+export async function listWaiterCodes(db: DB) {
+  const rows = await db
+    .select({ otp: otpCodes, table: diningTables, restaurant: restaurants })
+    .from(otpCodes)
+    .innerJoin(diningTables, eq(diningTables.id, otpCodes.tableId))
+    .innerJoin(restaurants, eq(restaurants.id, diningTables.restaurantId))
+    .where(and(isNotNull(otpCodes.waiterCode), isNull(otpCodes.usedAt), gt(otpCodes.expiresAt, new Date()), sql`${otpCodes.attempts} < ${OTP_MAX_ATTEMPTS}`))
+    .orderBy(desc(otpCodes.createdAt));
+  // Only the newest code per phone works, so hide older ones.
+  const seen = new Set<string>();
+  return rows
+    .filter((r) => !seen.has(r.otp.phone) && seen.add(r.otp.phone))
+    .map((r) => ({
+      id: r.otp.id,
+      code: r.otp.waiterCode!,
+      phoneLast4: r.otp.phone.slice(-4),
+      createdAt: r.otp.createdAt,
+      expiresAt: r.otp.expiresAt,
+      table: { id: r.table.id, number: r.table.number },
+      restaurant: { id: r.restaurant.id, name: r.restaurant.name },
+    }));
 }
 
 export async function verifyOtp(db: DB, phone: string, code: string): Promise<GuestActor> {
@@ -117,13 +152,19 @@ export async function verifyOtp(db: DB, phone: string, code: string): Promise<Gu
     // Mark used only if still unused, so the same code can't log in twice in parallel.
     const used = await tx
       .update(otpCodes)
-      .set({ usedAt: new Date() })
+      .set({ usedAt: new Date(), waiterCode: null })
       .where(and(eq(otpCodes.id, latest.id), isNull(otpCodes.usedAt)))
       .returning({ id: otpCodes.id });
     if (used.length === 0) throw new DomainError("This code has already been used. Ask for a new one.");
     let g = await tx.query.guests.findFirst({ where: eq(guests.phone, phone) });
     if (!g) [g] = await tx.insert(guests).values({ phone }).returning();
-    await tx.insert(auditLog).values({ actorType: "guest", actorId: g.id, actorName: phone, action: "guest.login_phone" });
+    await tx.insert(auditLog).values({
+      actorType: "guest",
+      actorId: g.id,
+      actorName: phone,
+      action: latest.tableId ? "guest.login_waiter_code" : "guest.login_phone",
+      tableId: latest.tableId,
+    });
     return { kind: "guest" as const, id: g.id, name: g.name || phone };
   });
 }

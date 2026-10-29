@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Banner, Button, VegMark, api } from "@/components/ui";
 import { chime, minutesAgo, usePoll, type StaffOrder } from "./usePoll";
+import LoginCodes from "./LoginCodes";
 
 type Tab = "new" | "kitchen" | "done";
 
@@ -98,6 +99,8 @@ export default function WaiterBoard() {
           <Banner tone="error">Can&apos;t reach the server: {error}. Retrying…</Banner>
         </div>
       )}
+
+      <LoginCodes restaurant={restaurant} />
 
       <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
         {groups[tab].map((o) => (

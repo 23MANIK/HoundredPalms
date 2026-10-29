@@ -7,7 +7,7 @@ type Props = {
   token: string;
   restaurantName: string;
   table: { number: number };
-  options: { google: boolean; phone: boolean };
+  options: { google: boolean; sms: boolean };
   loginFailed: boolean;
   onBack: () => void;
   onDone: (g: { id: number; name: string }) => void;
@@ -18,6 +18,7 @@ export default function LoginScreen(p: Props) {
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"phone" | "code" | "name">("phone");
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [via, setVia] = useState<"sms" | "waiter">("waiter");
   const [name, setName] = useState("");
   const [guest, setGuest] = useState<{ id: number; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,12 +36,17 @@ export default function LoginScreen(p: Props) {
     }
   };
 
-  const sendCode = () =>
+  const sendCode = (how: "sms" | "waiter") =>
     run(async () => {
-      const res = await api<{ devCode?: string }>("/api/auth/otp/request", { body: { phone } });
+      const res = await api<{ devCode?: string }>("/api/auth/otp/request", {
+        body: { phone, via: how, token: p.token },
+      });
+      setVia(how);
       setDevCode(res.devCode ?? null);
+      setCode("");
       setStep("code");
     });
+  const phoneReady = phone.replace(/\D/g, "").length >= 10;
 
   const verify = () =>
     run(async () => {
@@ -88,45 +94,52 @@ export default function LoginScreen(p: Props) {
                 Continue with Google
               </a>
             )}
-            {p.options.google && p.options.phone && (
+            {p.options.google && (
               <div className="flex items-center gap-3 text-[13px] text-ink-3">
                 <span className="h-px flex-1 bg-line" />
                 or
                 <span className="h-px flex-1 bg-line" />
               </div>
             )}
-            {p.options.phone && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  sendCode();
-                }}
-                className="flex flex-col gap-3.5"
-              >
-                <label htmlFor="phone" className="text-[13px] font-semibold text-ink-2">
-                  Mobile number
-                </label>
-                <div className="flex gap-2">
-                  <span className="flex h-[52px] items-center rounded-[14px] border-[1.5px] border-line px-3.5 font-semibold">+91</span>
-                  <input
-                    id="phone"
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel-national"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="98765 43210"
-                    className="h-[52px] min-w-0 flex-1 rounded-[14px] border-[1.5px] border-line px-4 text-base outline-none focus:border-palm-700"
-                  />
-                </div>
-                <button disabled={busy || phone.replace(/\D/g, "").length < 10} className="h-[52px] rounded-[14px] bg-palm-700 text-base font-bold text-white disabled:opacity-50">
-                  {busy ? "Sending…" : "Send OTP"}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                sendCode(p.options.sms ? "sms" : "waiter");
+              }}
+              className="flex flex-col gap-3.5"
+            >
+              <label htmlFor="phone" className="text-[13px] font-semibold text-ink-2">
+                Mobile number
+              </label>
+              <div className="flex gap-2">
+                <span className="flex h-[52px] items-center rounded-[14px] border-[1.5px] border-line px-3.5 font-semibold">+91</span>
+                <input
+                  id="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="98765 43210"
+                  className="h-[52px] min-w-0 flex-1 rounded-[14px] border-[1.5px] border-line px-4 text-base outline-none focus:border-palm-700"
+                />
+              </div>
+              {p.options.sms && (
+                <button disabled={busy || !phoneReady} className="h-[52px] rounded-[14px] bg-palm-700 text-base font-bold text-white disabled:opacity-50">
+                  {busy ? "Sending…" : "Send OTP by SMS"}
                 </button>
-              </form>
-            )}
-            {!p.options.google && !p.options.phone && (
-              <Banner>Online sign-in isn&apos;t switched on yet. Please ask your waiter to take your order.</Banner>
-            )}
+              )}
+              <button
+                type={p.options.sms ? "button" : "submit"}
+                onClick={p.options.sms ? () => sendCode("waiter") : undefined}
+                disabled={busy || !phoneReady}
+                className={`h-[52px] rounded-[14px] text-base font-bold disabled:opacity-50 ${
+                  p.options.sms ? "border-[1.5px] border-palm-700 bg-white text-palm-700" : "bg-palm-700 text-white"
+                }`}
+              >
+                {busy && !p.options.sms ? "Asking…" : "Get code from my waiter"}
+              </button>
+            </form>
           </>
         )}
 
@@ -138,8 +151,14 @@ export default function LoginScreen(p: Props) {
             }}
             className="flex flex-col gap-3.5"
           >
+            {via === "waiter" ? (
+              <div className="flex flex-col gap-1 rounded-xl bg-palm-100 px-4 py-3 text-palm-700">
+                <p className="font-bold">Your waiter has your code</p>
+                <p className="text-sm">Ask your waiter for the code for Table {p.table.number}. It shows on their screen.</p>
+              </div>
+            ) : null}
             <label htmlFor="otp" className="text-[13px] font-semibold text-ink-2">
-              Enter the 6-digit code sent to {phone}
+              {via === "waiter" ? "Enter the 6-digit code from your waiter" : `Enter the 6-digit code sent to ${phone}`}
             </label>
             {devCode && <Banner>Test mode, no SMS sent. Your code is {devCode}.</Banner>}
             <input
@@ -154,9 +173,14 @@ export default function LoginScreen(p: Props) {
             <button disabled={busy || code.length !== 6} className="h-[52px] rounded-[14px] bg-palm-700 text-base font-bold text-white disabled:opacity-50">
               {busy ? "Checking…" : "Verify and continue"}
             </button>
-            <button type="button" onClick={() => setStep("phone")} className="min-h-11 text-sm font-semibold text-palm-700">
-              Change number
-            </button>
+            <div className="flex justify-center gap-4">
+              <button type="button" onClick={() => setStep("phone")} className="min-h-11 text-sm font-semibold text-palm-700">
+                Change number
+              </button>
+              <button type="button" disabled={busy} onClick={() => sendCode(via)} className="min-h-11 text-sm font-semibold text-palm-700">
+                Get a new code
+              </button>
+            </div>
           </form>
         )}
 

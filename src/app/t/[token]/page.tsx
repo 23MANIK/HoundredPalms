@@ -32,7 +32,7 @@ export default async function TablePage({
       menu={menu}
       guest={guest ? { id: guest.id, name: guest.name } : null}
       gstRateBp={gstRateBp}
-      login={{ google: googleEnabled(), phone: smsConfigured() || devOtpAllowed() }}
+      login={{ google: googleEnabled(), sms: smsConfigured() || devOtpAllowed() }}
       loginFailed={(await searchParams).login === "failed"}
     />
   );
