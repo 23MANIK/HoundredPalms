@@ -1,6 +1,6 @@
 import { chromium, request, type FullConfig } from "@playwright/test";
 import fs from "node:fs";
-import { STATE_DIR, STAFF_STATE, TABLES_FILE, bypassHeaders, staffLogin, type TableLink } from "./helpers";
+import { ROLE_STATE, STATE_DIR, STAFF_STATE, TABLES_FILE, TEST_ROLES, TEST_ROLE_PIN, bypassHeaders, isRemote, staffLogin, type TableLink } from "./helpers";
 
 /**
  * Signs in once as the manager, saves the login for every test, and reads the
@@ -17,6 +17,19 @@ export default async function globalSetup(config: FullConfig) {
     throw new Error(`Staff sign-in failed on ${baseURL} (${res.status()}): ${await res.text()}`);
   }
   await api.storageState({ path: STAFF_STATE });
+
+  // On a local copy only: one login per staff role, for the access checks.
+  if (!isRemote()) {
+    for (const r of TEST_ROLES) {
+      const add = await api.post("/api/staff/team", { data: { name: r.name, phone: r.phone, role: r.role, pin: TEST_ROLE_PIN } });
+      if (!add.ok() && !(await add.text()).includes("already uses")) throw new Error(`Adding ${r.role} login: ${await add.text()}`);
+      const ctx = await request.newContext({ baseURL });
+      const login = await ctx.post("/api/staff/login", { data: { phone: r.phone, pin: TEST_ROLE_PIN } });
+      if (!login.ok()) throw new Error(`${r.role} sign-in failed: ${await login.text()}`);
+      await ctx.storageState({ path: ROLE_STATE(r.role) });
+      await ctx.dispose();
+    }
+  }
   await api.dispose();
 
   const browser = await chromium.launch();
