@@ -1,0 +1,63 @@
+name: Live site check
+
+# Runs the same end-to-end checks against the live site (or a preview), as a
+# real guest and a manager would use it. Test orders use the name
+# "E2E Test Guest", are cleaned up, and the bill is closed at 100% discount,
+# so they never count as sales. If a real guest has an open bill on the test
+# table, the order test is skipped and nothing is touched.
+#
+# Needs two repository secrets: E2E_STAFF_PHONE and E2E_STAFF_PIN (a manager login).
+
+on:
+  # After every successful Vercel deployment (when Vercel is linked to GitHub).
+  deployment_status:
+  # Every morning at 10:30 IST.
+  schedule:
+    - cron: "0 5 * * *"
+  # By hand: Actions → Live site check → Run workflow.
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Site to test
+        default: https://hundred-palms.vercel.app
+
+concurrency:
+  group: live-site-check
+  cancel-in-progress: false
+
+jobs:
+  live:
+    if: github.event_name != 'deployment_status' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_BASE_URL: ${{ github.event.deployment_status.environment_url || inputs.url || 'https://hundred-palms.vercel.app' }}
+      E2E_STAFF_PHONE: ${{ secrets.E2E_STAFF_PHONE }}
+      E2E_STAFF_PIN: ${{ secrets.E2E_STAFF_PIN }}
+      # Lets the checks through Vercel's login wall on preview deployments.
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - name: Check the staff login is set
+        run: |
+          if [ -z "$E2E_STAFF_PHONE" ] || [ -z "$E2E_STAFF_PIN" ]; then
+            echo "::error::Add the E2E_STAFF_PHONE and E2E_STAFF_PIN repository secrets (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: live-e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

@@ -44,6 +44,16 @@ npm run lint && npm run typecheck && npm test && npm run build
 
 Tests run against a real Postgres database (`TEST_DATABASE_URL`, default `postgresql://hp:hp@localhost:5432/hundredpalms_test`), which they wipe first. GitHub Actions runs all four checks on every pull request.
 
+### End-to-end checks
+
+`npm run e2e` opens the app in a real browser and clicks through it like a guest and the staff would, on a phone and a laptop screen size: menu, search, cart, login code from the waiter, order, item unavailable, approval, kitchen, serving, cancelling, bill and activity log. It starts the built app (`npm run build` first) against `DATABASE_URL`, signs in with `SEED_MANAGER_PHONE` and `SEED_MANAGER_PIN`, and finds tables through **Print QR cards**.
+
+To check the live site: `E2E_STAFF_PHONE=... E2E_STAFF_PIN=... npm run e2e:live`. Test orders use the name "E2E Test Guest", always on the highest-numbered Good Life table; the bill is closed at 100% discount so it never counts as a sale. If a real guest has an open bill on that table, the order check is skipped and nothing is touched.
+
+GitHub Actions runs the end-to-end checks on every pull request, and the **Live site check** workflow runs them against the live site after each Vercel deploy, every morning at 10:30, or by hand from the Actions tab. It needs the `E2E_STAFF_PHONE` and `E2E_STAFF_PIN` repository secrets. Failed runs keep screenshots, a video and a step-by-step trace under the run's artifacts; open the trace with `npx playwright show-trace`.
+
+For Claude Code, `.claude/agents/qa-tester.md` is a tester agent that runs all checks after each checkpoint and reports what passes and what breaks.
+
 ## Settings
 
 | Variable | Needed | What it does |

@@ -37,3 +37,47 @@ jobs:
         env:
           DATABASE_URL: postgresql://hp:hp@localhost:5432/hundredpalms_test
           SESSION_SECRET: ci-only-secret-ci-only-secret-ci-only
+
+  # Clicks through the whole app (guest phone + staff screens) on a fresh copy
+  # of the app with its own database, on a phone and a laptop screen size.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: hp
+          POSTGRES_PASSWORD: hp
+          POSTGRES_DB: hundredpalms_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://hp:hp@localhost:5432/hundredpalms_e2e
+      SESSION_SECRET: ci-only-secret-ci-only-secret-ci-only
+      SEED_MANAGER_PHONE: "9999999999"
+      SEED_MANAGER_PIN: "1234"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - run: npm run build
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
