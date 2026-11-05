@@ -14,6 +14,8 @@ import {
   tabs,
 } from "@/db/schema";
 import { computeBill } from "./money";
+import { type AuditAction, describeAction } from "./audit-events";
+import { guestLabel, redactText, redactValue } from "./privacy";
 
 export class DomainError extends Error {
   constructor(
@@ -46,19 +48,20 @@ function requireRole(actor: StaffActor, roles: StaffRole[]) {
 async function audit(
   conn: Conn,
   actor: Actor | { kind: "system"; name: string },
-  action: string,
+  action: AuditAction,
   refs: { tableId?: number; tabId?: number; orderId?: number },
   details: Record<string, unknown> = {},
 ) {
   await conn.insert(auditLog).values({
     actorType: actor.kind,
     actorId: "id" in actor ? actor.id : null,
-    actorName: actor.name,
+    // A guest without a name is known by their number, so mask it before it is stored.
+    actorName: redactText(actor.name),
     action,
     tableId: refs.tableId ?? null,
     tabId: refs.tabId ?? null,
     orderId: refs.orderId ?? null,
-    details,
+    details: redactValue(details),
   });
 }
 
@@ -385,7 +388,7 @@ export async function getTabDetail(conn: Conn, tabId: number) {
     ? await conn.select({ id: guests.id, name: guests.name, phone: guests.phone, email: guests.email }).from(guests).where(inArray(guests.id, [...guestIds]))
     : [];
   const staffName = new Map(staffRows.map((s) => [s.id, s.name]));
-  const guestName = new Map(guestRows.map((g) => [g.id, g.name || g.phone || g.email || "Guest"]));
+  const guestName = new Map(guestRows.map((g) => [g.id, guestLabel(g)]));
 
   const gstRateBp = tab.gstRateBp ?? (await getGstRateBp(conn));
   const billable = items.filter((i) => {
@@ -492,7 +495,7 @@ export async function listActiveOrders(db: DB) {
     tabId: r.order.tabId,
     table: { id: r.table.id, number: r.table.number },
     restaurant: { id: r.restaurant.id, name: r.restaurant.name },
-    guest: r.guest ? r.guest.name || r.guest.phone || r.guest.email || "Guest" : "Waiter order",
+    guest: r.guest ? guestLabel(r.guest) : "Waiter order",
     items: items.filter((i) => i.orderId === r.order.id).map((i) => ({ id: i.id, name: i.name, qty: i.qty, status: i.status, isVeg: i.isVeg })),
   }));
 }
@@ -533,8 +536,16 @@ export async function todaysSales(db: DB) {
   return rows[0];
 }
 
+/** The activity log for managers: plain-English event names and no full phone numbers or emails. */
 export async function recentAudit(db: DB, limit = 100) {
-  return db.select().from(auditLog).orderBy(desc(auditLog.at), desc(auditLog.id)).limit(Math.min(limit, 500));
+  const rows = await db.select().from(auditLog).orderBy(desc(auditLog.at), desc(auditLog.id)).limit(Math.min(limit, 500));
+  // Older rows were stored before masking, so mask again on the way out.
+  return rows.map(({ actorName, details, ...rest }) => ({
+    ...rest,
+    actorName: redactText(actorName),
+    label: describeAction(rest.action),
+    details: redactValue(details as Record<string, unknown>),
+  }));
 }
 
 // ---------- Guest views ----------

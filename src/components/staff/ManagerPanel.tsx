@@ -505,39 +505,8 @@ function SettingsSection() {
 
 // ---------- Activity log ----------
 
-type Entry = { id: number; at: string; actorType: string; actorName: string; action: string; tableId: number | null; orderId: number | null; details: Record<string, unknown> };
-
-const ACTIONS: Record<string, string> = {
-  "order.placed": "placed an order",
-  "order.placed_by_staff": "took an order for a table",
-  "order.approved": "approved an order",
-  "order.returned_to_guest": "sent an order back (items unavailable)",
-  "order.guest_removed_unavailable": "removed unavailable items",
-  "order.preparing": "started cooking",
-  "order.ready": "marked ready",
-  "order.served": "served",
-  "order.cancelled": "cancelled an order",
-  "item.marked_unavailable": "marked an item unavailable",
-  "item.marked_available": "marked an item available",
-  "tab.opened": "opened a table bill",
-  "tab.bill_requested": "asked for the bill",
-  "tab.paid": "closed a bill",
-  "menu.item_created": "added a dish",
-  "menu.item_updated": "edited a dish",
-  "menu.item_removed": "removed a dish",
-  "menu.sold_out": "marked a dish sold out",
-  "menu.back_in_stock": "put a dish back in stock",
-  "table.added": "added a table",
-  "table.updated": "changed a table",
-  "table.restored": "restored a table",
-  "staff.added": "added a staff member",
-  "staff.enabled": "switched on a staff login",
-  "staff.disabled": "switched off a staff login",
-  "staff.login": "signed in",
-  "guest.login_phone": "signed in with mobile",
-  "guest.login_google": "signed in with Google",
-  "settings.gst": "changed GST",
-};
+// The server sends plain-English labels and masks phone numbers and emails.
+type Entry = { id: number; at: string; actorType: string; actorName: string; action: string; label: string; tableId: number | null; orderId: number | null; details: Record<string, unknown> };
 
 function describe(e: Entry) {
   const d = e.details ?? {};
@@ -576,7 +545,7 @@ function LogSection() {
                 <span className="ml-1 text-xs font-normal text-ink-3">{e.actorType}</span>
               </td>
               <td className="px-4 py-2.5">
-                {ACTIONS[e.action] ?? e.action}
+                {e.label}
                 {e.orderId ? <span className="text-ink-3"> #{e.orderId}</span> : null}
               </td>
               <td className="px-4 py-2.5 text-ink-2">{describe(e)}</td>
