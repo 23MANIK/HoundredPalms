@@ -40,6 +40,18 @@ npm run e2e
 
 The run takes about 2 minutes. There are 14 checks, each run on a Pixel 7 phone size and a 1366×768 laptop size, so 28 in all.
 
+## Batching several PRs
+
+The end-to-end run is slow. When several PRs are in flight and nothing is urgent, test them together once:
+
+```bash
+git fetch origin
+git checkout -B e2e/batch origin/main
+git merge --no-edit origin/<branch-1> origin/<branch-2>   # resolve conflicts if any
+```
+
+Then run steps 1 and 2 on `e2e/batch`, or push it and start CI from Actions with **Run workflow**, choosing the `e2e/batch` branch. In CI, PRs skip the end-to-end job unless they carry the `run-e2e` label; it always runs on `main`. Report one result for the batch and name every PR in it. Delete the batch branch afterwards. If a check fails, find which PR caused it before reporting.
+
 ## 3. Live site (when asked, or after a deploy)
 
 The cloud sandbox cannot reach `hundred-palms.vercel.app`. To run against the live site, start the **Live site check** workflow in GitHub Actions (it runs on its own after each deploy and at 10:30 IST every day). It uses the `E2E_STAFF_PHONE` and `E2E_STAFF_PIN` repository secrets. From a machine that can reach the site:

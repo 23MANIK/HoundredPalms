@@ -147,14 +147,22 @@ function BillPanel({
   onClosed: (bill: Bill, method: string) => Promise<void>;
 }) {
   const { data } = usePoll<TabDetail>(`/api/staff/tabs/${tabId}`, 5000);
-  const [discount, setDiscount] = useState(0);
+  const [discountText, setDiscountText] = useState("0");
   const [method, setMethod] = useState<"cash" | "upi" | "card" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState<Bill | null>(null);
   const maxDiscount = role === "manager" ? 100 : 20;
 
-  useEffect(() => setError(null), [discount, method]);
+  // Keep what the cashier typed and explain what's wrong, never change it silently.
+  const discountProblem = !/^\d{1,3}$/.test(discountText.trim())
+    ? "Enter a whole number for the discount, like 10"
+    : Number(discountText) > maxDiscount
+      ? `Discount can be at most ${maxDiscount}%${role === "manager" ? "" : ". Ask a manager for more"}`
+      : null;
+  const discount = discountProblem ? 0 : Number(discountText);
+
+  useEffect(() => setError(null), [discountText, method]);
 
   if (!data) return <div className="rounded-[20px] bg-white p-6 text-ink-3">Loading bill…</div>;
 
@@ -229,13 +237,22 @@ function BillPanel({
           <input
             id="disc"
             type="number"
+            inputMode="numeric"
             min={0}
             max={maxDiscount}
-            value={discount}
-            onChange={(e) => setDiscount(Math.max(0, Math.min(maxDiscount, Math.floor(Number(e.target.value) || 0))))}
-            className="h-10 w-20 rounded-lg border-[1.5px] border-line px-2 text-right"
+            step={1}
+            value={discountText}
+            aria-invalid={!!discountProblem}
+            aria-describedby={discountProblem ? "disc-error" : undefined}
+            onChange={(e) => setDiscountText(e.target.value)}
+            className={`h-10 w-20 rounded-lg border-[1.5px] px-2 text-right ${discountProblem ? "border-nonveg" : "border-line"}`}
           />
         </div>
+        {discountProblem && (
+          <p id="disc-error" role="alert" className="text-right text-[13px] font-semibold text-nonveg">
+            {discountProblem}
+          </p>
+        )}
         {d > 0 && <Row label="Discount" value={`− ${formatRupees(d)}`} />}
         <Row label={`CGST ${gstHalfPct}%`} value={formatRupees(half)} />
         <Row label={`SGST ${gstHalfPct}%`} value={formatRupees(half)} />
@@ -264,7 +281,7 @@ function BillPanel({
               </button>
             ))}
           </div>
-          <Button onClick={close} disabled={busy || !method || data.unresolved > 0 || sub === 0} className="no-print h-[52px] text-base">
+          <Button onClick={close} disabled={busy || !method || !!discountProblem || data.unresolved > 0 || sub === 0} className="no-print h-[52px] text-base">
             {method ? `Mark paid by ${method.toUpperCase()} · close table` : "Choose how they paid"}
           </Button>
         </>

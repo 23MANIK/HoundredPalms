@@ -207,6 +207,8 @@ function OrderCard({ order: o, onChange }: { order: StaffOrder; onChange: () => 
             <input
               id={`reason-${o.id}`}
               autoFocus
+              required
+              maxLength={200}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Guest changed their mind"

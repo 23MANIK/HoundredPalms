@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatRupees } from "@/lib/money";
 import { Banner, Button, VegMark, api } from "@/components/ui";
@@ -33,8 +33,10 @@ export default function TakeOrder() {
       return next;
     });
 
+  const sending = useRef(false);
   const submit = async () => {
-    if (!tableId) return;
+    if (!tableId || sending.current) return;
+    sending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -42,6 +44,7 @@ export default function TakeOrder() {
       router.push("/staff/waiter");
     } catch (e) {
       setError((e as Error).message);
+      sending.current = false;
       setBusy(false);
     }
   };

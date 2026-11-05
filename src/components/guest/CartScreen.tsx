@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { formatRupees, type Bill } from "@/lib/money";
 import { Banner, VegMark } from "@/components/ui";
 import type { Dish } from "./GuestApp";
@@ -40,8 +40,12 @@ export default function CartScreen(p: Props) {
   const [error, setError] = useState<string | null>(null);
   const gstPct = p.bill.gstRateBp / 100;
 
+  // A ref, not state: two quick taps land before React re-renders the disabled button.
+  const sending = useRef(false);
   const submit = async () => {
     if (!p.signedIn) return p.onNeedLogin();
+    if (sending.current) return;
+    sending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -49,6 +53,7 @@ export default function CartScreen(p: Props) {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   };
