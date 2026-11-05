@@ -1,0 +1,84 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- plain Node script run outside the app */
+// Walks one evening at a table on the local app and screenshots each key screen.
+const { chromium, devices } = require(require('path').resolve('node_modules/@playwright/test'));
+const OUT = process.argv[2];
+const TABLE = process.argv[3];
+const BASE = 'http://localhost:3000';
+const phone = '9876501234';
+(async () => {
+  const browser = await chromium.launch();
+  const g = await (await browser.newContext({ ...devices['Pixel 7'], deviceScaleFactor: 3, locale: 'en-IN', timezoneId: 'Asia/Kolkata' })).newPage();
+  const sctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, locale: 'en-IN', timezoneId: 'Asia/Kolkata' });
+  const r = await sctx.request.post(BASE + '/api/staff/login', { data: { phone: '9999999999', pin: '1234' } });
+  if (!r.ok()) throw new Error('login ' + r.status());
+  const s = await sctx.newPage();
+  const shot = async (p, n) => { await p.waitForTimeout(700); await p.screenshot({ path: `${OUT}/${n}.png` }); console.log('shot', n); };
+  const T = 4;
+
+  await g.goto(BASE + '/t/' + TABLE); await g.waitForLoadState('networkidle');
+  await shot(g, 'g01-menu');
+  await g.mouse.wheel(0, 700); await shot(g, 'g02-menu-scroll');
+  await g.mouse.wheel(0, -700);
+  for (const n of ['Paneer Tikka', 'Chicken Biryani', 'Butter Naan']) await g.getByRole('button', { name: 'Add ' + n, exact: true }).first().click();
+  await shot(g, 'g03-cartbar');
+  await g.getByRole('button', { name: /3 items.*View cart/ }).click();
+  await g.getByLabel('Cooking instructions (optional)').fill('Less spicy please');
+  await shot(g, 'g04-cart');
+  await g.getByRole('button', { name: 'Sign in to place order' }).click();
+  await g.getByLabel('Mobile number').fill(phone);
+  await shot(g, 'g05-login');
+  await g.getByRole('button', { name: 'Get code from my waiter' }).click();
+  await g.getByText('Your waiter has your code').waitFor();
+  await shot(g, 'g06-waitcode');
+
+  await s.goto(BASE + '/staff/waiter');
+  const codeCard = s.getByRole('region', { name: /Guests waiting for a login code/ }).getByRole('listitem').filter({ hasText: `Table ${T}` }).filter({ hasText: 'Good Life' });
+  await codeCard.waitFor();
+  await shot(s, 's01-waiter-code');
+  const code = (await codeCard.locator('.font-mono').textContent()).trim();
+  await g.getByLabel(/Enter the 6-digit code/).fill(code);
+  await g.getByRole('button', { name: 'Verify and continue' }).click();
+  await g.getByLabel('What should we call you?').fill('Aarav');
+  await g.getByRole('button', { name: 'Continue' }).click();
+  await g.getByRole('button', { name: /^Place order · ₹/ }).waitFor();
+  await shot(g, 'g07-ready');
+  await g.getByRole('button', { name: /^Place order · ₹/ }).click();
+  await g.getByText('Waiting for your waiter to confirm').waitFor();
+  await shot(g, 'g08-waiting');
+  const id = Number((await g.getByText(/^Order #\d+/).first().textContent()).match(/#(\d+)/)[1]);
+  const card = s.locator('article').filter({ hasText: `#${id} ·` });
+  await card.waitFor({ timeout: 20000 });
+  await shot(s, 's02-waiter-order');
+  await card.screenshot({ path: `${OUT}/s02b-card.png` });
+  await card.getByRole('button', { name: 'Approve · send to kitchen' }).click();
+  await g.getByText(/^Approved/).first().waitFor({ timeout: 20000 });
+  await shot(g, 'g09-approved');
+
+  await s.goto(BASE + '/staff/kitchen');
+  const ticket = s.locator('article').filter({ hasText: `T${T}` }).filter({ hasText: 'Good Life' });
+  await ticket.waitFor();
+  await shot(s, 's03-kitchen');
+  await ticket.getByRole('button', { name: 'Start cooking' }).click();
+  await g.getByText('The kitchen is cooking').waitFor({ timeout: 20000 });
+  await shot(g, 'g10-cooking');
+  await ticket.getByRole('button', { name: 'Ready' }).click();
+  await g.getByText('Ready, coming to your table').waitFor({ timeout: 20000 });
+  await s.goto(BASE + '/staff/waiter');
+  await s.getByRole('tab', { name: /^Kitchen/ }).click();
+  await card.getByRole('button', { name: 'Mark served' }).click();
+  await g.getByText('Served. Enjoy your meal!').waitFor({ timeout: 20000 });
+  await shot(g, 'g11-served');
+  const bill = g.locator('section').filter({ hasText: 'Table bill so far' });
+  await bill.getByRole('button', { name: 'Ask for the bill' }).click();
+  await g.getByText("The cashier knows you'd like the bill").waitFor();
+  await shot(g, 'g12-billasked');
+
+  await s.goto(BASE + '/staff/cashier');
+  await s.getByRole('button', { name: `Good Life table ${T}, bill asked` }).click();
+  await s.getByRole('region', { name: `Bill for table ${T}` }).waitFor();
+  await shot(s, 's04-cashier');
+  await s.getByRole('region', { name: `Bill for table ${T}` }).screenshot({ path: `${OUT}/s04b-bill.png` });
+  await s.goto(BASE + '/staff/manager');
+  await shot(s, 's05-manager');
+  await browser.close();
+})().catch(e => { console.error(e); process.exit(1); });

@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: Jakarta; src: url(fonts/jakarta.woff2) format("woff2"); font-weight: 200 800; }
+:root { --palm-950:#082a1f; --palm-900:#0d3a2b; --palm-700:#14513d; --palm-100:#e3f2e7; --marigold:#e9b44c; --sand:#f4f3ef; --ink:#1b1f1d; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--palm-950); font-family: Jakarta, sans-serif; }
+#stage { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(1200px 800px at 75% 55%, #145a40 0%, var(--palm-950) 65%); }
+.abs { position: absolute; will-change: transform, opacity; }
+.kicker { font-size: 26px; font-weight: 700; letter-spacing: .22em; color: var(--marigold); }
+.h { font-weight: 800; color: var(--sand); letter-spacing: -0.02em; line-height: 1.04; }
+.m { color: var(--marigold); }
+/* phone */
+#phone { left: 1230px; top: 120px; width: 433px; height: 860px; border-radius: 64px; background: #0b0d0c;
+  padding: 18px; box-shadow: 0 50px 120px rgba(0,0,0,.55), 0 0 0 3px #2a2f2c inset; }
+#screen { position: relative; width: 397px; height: 824px; border-radius: 48px; overflow: hidden; background: var(--sand); }
+#screen img { position: absolute; left: 0; top: 0; width: 100%; height: auto; }
+/* browser window */
+.win { border-radius: 22px; background: #fff; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,.5); }
+.bar { height: 44px; background: #e9ebe9; display: flex; align-items: center; gap: 10px; padding: 0 18px; }
+.bar i { width: 14px; height: 14px; border-radius: 50%; background: #c9cdca; display: block; }
+.bar span { margin-left: 14px; font-size: 17px; color: #5b615e; background: #fff; border-radius: 8px; padding: 5px 16px; }
+.win img { display: block; width: 100%; }
+#stamp { font-size: 40px; font-weight: 800; color: var(--palm-950); background: var(--marigold); padding: 16px 30px;
+  border-radius: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.4); }
+.pill { font-size: 24px; font-weight: 700; color: var(--palm-950); background: var(--palm-100); border-radius: 99px; padding: 10px 22px; display: inline-block; }
+#ripple { width: 90px; height: 90px; border-radius: 50%; border: 6px solid var(--marigold); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- scene 1+2 text -->
+  <div id="k1" class="abs kicker" style="left:160px;top:330px">HUNDRED PALMS · MAHOBA</div>
+  <div id="h1a" class="abs h" style="left:154px;top:390px;font-size:118px">Scan the table.</div>
+  <div id="h1b" class="abs h m" style="left:154px;top:530px;font-size:84px">Order from your phone.</div>
+
+  <div id="h2a" class="abs h" style="left:154px;top:360px;font-size:118px">Browse. Add.</div>
+  <div id="h2b" class="abs h m" style="left:154px;top:500px;font-size:118px">Place order.</div>
+  <div id="p2" class="abs" style="left:160px;top:680px;display:flex;gap:14px">
+    <span class="pill">Veg &amp; non-veg</span><span class="pill">Bestsellers</span><span class="pill">Cooking notes</span>
+  </div>
+
+  <!-- scene 3 -->
+  <div id="h3" class="abs h" style="left:154px;top:110px;font-size:68px">A waiter checks <span class="m">every</span> order.</div>
+  <div id="w3" class="abs win" style="left:260px;top:240px;width:560px">
+    <div class="bar"><i></i><i></i><i></i><span>Waiter · Orders</span></div>
+    <img src="shots/s02b-card.png">
+  </div>
+  <div id="stamp" class="abs" style="left:640px;top:205px">✓ Approved by waiter</div>
+
+  <!-- scene 4 -->
+  <div id="h4a" class="abs h" style="left:154px;top:110px;font-size:68px">Only then the kitchen sees it.</div>
+  <div id="w4" class="abs win" style="left:150px;top:250px;width:1000px">
+    <div class="bar"><i></i><i></i><i></i><span>Kitchen</span></div>
+    <div style="height:560px;overflow:hidden"><img src="shots/s03-kitchen.png" style="width:2000px;max-width:none;margin:-215px 0 0 -40px"></div>
+  </div>
+
+  <!-- scene 5 -->
+  <div id="h5a" class="abs h" style="left:154px;top:300px;font-size:96px">Who ordered.</div>
+  <div id="h5b" class="abs h" style="left:154px;top:410px;font-size:96px">Who approved.</div>
+  <div id="h5c" class="abs h m" style="left:154px;top:520px;font-size:96px">All on the bill.</div>
+  <div id="w5" class="abs win" style="left:1230px;top:120px;width:440px">
+    <div class="bar"><i></i><i></i><i></i><span>Cashier</span></div>
+    <img src="shots/s04b-bill.png">
+  </div>
+
+  <!-- phone (scenes 1-4) -->
+  <div id="phone" class="abs"><div id="screen">
+    <img id="s_g01" src="shots/g01-menu.png"><img id="s_g02" src="shots/g02-menu-scroll.png">
+    <img id="s_g03" src="shots/g03-cartbar.png"><img id="s_g04" src="shots/g04-cart.png">
+    <img id="s_g08" src="shots/g08-waiting.png"><img id="s_g09" src="shots/g09-approved.png">
+    <img id="s_g10" src="shots/g10-cooking.png"><img id="s_g11" src="shots/g11-served.png">
+  </div></div>
+  <div id="ripple" class="abs"></div>
+
+  <!-- scene 6 -->
+  <div id="o1" class="abs h" style="left:0;width:1920px;text-align:center;top:360px;font-size:150px">Hundred Palms</div>
+  <div id="o2" class="abs h m" style="left:0;width:1920px;text-align:center;top:545px;font-size:72px">Scan. Order. Enjoy.</div>
+  <div id="o3" class="abs" style="left:0;width:1920px;text-align:center;top:690px;font-size:30px;font-weight:600;color:var(--palm-100);letter-spacing:.04em">QR table ordering · Mahoba</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const easeOut = x => 1 - Math.pow(1 - clamp(x), 3);
+const easeInOut = x => { x = clamp(x); return x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2; };
+const back = x => { x = clamp(x); const c = 1.7; return 1 + (c+1)*Math.pow(x-1,3) + c*Math.pow(x-1,2); };
+// in/out window: rises in at tin, drops out at tout
+function show(id, t, tin, tout, { dy = 40, dur = .35, outDur = .25, scale = false } = {}) {
+  const a = easeOut((t - tin) / dur), b = tout == null ? 0 : easeInOut((t - tout) / outDur);
+  const o = a * (1 - b), y = (1 - a) * dy - b * 24;
+  const s = scale ? (0.92 + 0.08 * back((t - tin) / dur)) : 1;
+  const el = $(id); el.style.opacity = o; el.style.transform = `translateY(${y}px) scale(${s})`;
+  el.style.visibility = o < .001 ? 'hidden' : 'visible';
+}
+const screens = [['s_g01',0],['s_g02',3.4],['s_g03',4.5],['s_g04',5.5],['s_g08',7.0],['s_g09',9.25],['s_g10',11.5],['s_g11',13.5]];
+window.render = t => {
+  // scene 1 (0-3)
+  show('k1', t, .05, 2.75); show('h1a', t, .2, 2.75); show('h1b', t, 1.0, 2.75);
+  // scene 2 (3-7)
+  show('h2a', t, 3.05, 6.75); show('h2b', t, 3.6, 6.75); show('p2', t, 4.6, 6.75);
+  // scene 3 (7-11)
+  show('h3', t, 7.05, 10.75); show('w3', t, 7.25, 10.75, { dy: 80, dur: .5 });
+  show('stamp', t, 9.0, 10.75, { dy: 0, dur: .3, scale: true });
+  $('stamp').style.transform += ' rotate(-4deg)';
+  // scene 4 (11-15)
+  show('h4a', t, 11.05, 14.75); show('w4', t, 11.25, 14.75, { dy: 80, dur: .5 });
+  // scene 5 (15-18)
+  show('h5a', t, 15.05, 17.75); show('h5b', t, 15.55, 17.75); show('h5c', t, 16.05, 17.75);
+  show('w5', t, 15.25, 17.75, { dy: 120, dur: .5 });
+  // slow drift on the bill so it reads top to bottom
+  // scene 6 (18-21)
+  show('o1', t, 18.1, null, { dy: 0, dur: .45, scale: true }); show('o2', t, 18.6, null); show('o3', t, 19.1, null);
+
+  // phone: rises in, then holds on the right; exits at 14.75
+  const pin = easeOut((t - .45) / .7), pout = easeInOut((t - 14.75) / .4);
+  const ph = $('phone');
+  ph.style.opacity = pin * (1 - pout);
+  ph.style.transform = `translateY(${(1 - pin) * 500 + pout * 60}px) rotate(${(1 - pin) * 6}deg) scale(${1 + .015 * Math.sin(t * 1.2)})`;
+  // screen swaps: new screen slides up over the old one
+  let cur = 0;
+  screens.forEach(([id, at], i) => { if (t >= at) cur = i; });
+  screens.forEach(([id, at], i) => {
+    const el = $(id);
+    if (i === cur) { const k = easeOut((t - at) / .3); el.style.opacity = i === 0 ? 1 : k; el.style.transform = `translateY(${i === 0 ? 0 : (1 - k) * 60}px)`; el.style.zIndex = 2; }
+    else if (i === cur - 1) { el.style.opacity = 1; el.style.transform = 'none'; el.style.zIndex = 1; }
+    else { el.style.opacity = 0; el.style.zIndex = 0; }
+  });
+  // taps on the phone (add dishes, view cart)
+  const taps = [[5.25, 1446, 913]];
+  const r = $('ripple'); r.style.opacity = 0;
+  taps.forEach(([at, x, y]) => { const k = (t - at) / .45; if (k >= 0 && k <= 1) {
+    r.style.left = (x - 45) + 'px'; r.style.top = (y - 45) + 'px';
+    r.style.opacity = 1 - k; r.style.transform = `scale(${.4 + k})`; } });
+};
+window.ready = Promise.all([document.fonts.load('800 50px Jakarta'), ...[...document.images].map(i => i.decode())]);
+render(0);
+</script>
+</body>
+</html>
