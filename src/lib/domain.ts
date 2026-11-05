@@ -14,6 +14,7 @@ import {
   tabs,
 } from "@/db/schema";
 import { computeBill } from "./money";
+import { isLiveSite, isPlaceholderPhone } from "./live-site";
 
 export class DomainError extends Error {
   constructor(
@@ -656,12 +657,29 @@ export async function addStaff(db: DB, actor: StaffActor, input: { name: string;
   requireRole(actor, ["manager"]);
   const name = input.name.trim();
   if (!name) throw new DomainError("Name is required");
+  if (isLiveSite() && isPlaceholderPhone(input.phone)) throw new DomainError("Use the staff member's real mobile number");
   return db.transaction(async (tx) => {
     const clash = await tx.query.staff.findFirst({ where: eq(staff.phone, input.phone) });
     if (clash) throw new DomainError("Someone already uses this mobile number");
     const [row] = await tx.insert(staff).values({ ...input, name }).returning({ id: staff.id });
     await audit(tx, actor, "staff.added", {}, { id: row.id, name, role: input.role });
     return row.id;
+  });
+}
+
+/** Gives a staff member a new PIN and signs out every device that used the old one. */
+export async function resetStaffPin(db: DB, actor: StaffActor, id: number, pinHash: string) {
+  requireRole(actor, ["manager"]);
+  return db.transaction(async (tx) => {
+    const s = await tx.query.staff.findFirst({ where: eq(staff.id, id) });
+    if (!s) throw new DomainError("Staff member not found", 404);
+    const [row] = await tx
+      .update(staff)
+      .set({ pinHash, failedLogins: 0, lockedUntil: null, sessionVersion: sql`${staff.sessionVersion} + 1` })
+      .where(eq(staff.id, id))
+      .returning({ sessionVersion: staff.sessionVersion });
+    await audit(tx, actor, "staff.pin_reset", {}, { id, name: s.name });
+    return row.sessionVersion;
   });
 }
 

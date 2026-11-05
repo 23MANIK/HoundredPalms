@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { getDb, type DB } from "@/db";
 import { DomainError, type GuestActor, type StaffActor, type StaffRole } from "./domain";
-import { GUEST_COOKIE, STAFF_COOKIE, loadGuest, loadStaff, readSession, readSessionClaims } from "./auth";
+import { GUEST_COOKIE, STAFF_COOKIE, loadGuest, loadStaff, readSessionClaims } from "./auth";
 
 export function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -75,7 +75,7 @@ export async function currentGuest(db: DB): Promise<GuestActor | null> {
 
 export async function currentStaff(db: DB): Promise<StaffActor | null> {
   const store = await cookies();
-  return loadStaff(db, await readSession(store.get(STAFF_COOKIE)?.value, "staff"));
+  return loadStaff(db, await readSessionClaims(store.get(STAFF_COOKIE)?.value, "staff"));
 }
 
 export async function requireGuest(db: DB): Promise<GuestActor> {

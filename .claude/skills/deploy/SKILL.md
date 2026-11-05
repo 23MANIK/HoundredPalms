@@ -26,7 +26,11 @@ deploy is started by hand from a commit on `main`.
 | Live URL | https://hundred-palms.vercel.app |
 
 The project's build command already runs `npm run db:migrate && npm run db:seed`
-on production builds before `npm run build`. The seed is safe to run again.
+on production builds before `npm run build`. The seed is safe to run again: it does
+nothing once restaurants exist. On an empty production database it refuses a
+placeholder phone (like 9999999999) or an easy PIN, so set real values first.
+On the live site, placeholder numbers can't sign in at all, so the live check
+needs `E2E_STAFF_PHONE`/`E2E_STAFF_PIN` to be a real staff login (the Test Bot).
 
 ## Steps
 

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { formatRupees } from "@/lib/money";
 import { Banner, Button, DishImage, VegMark, api } from "@/components/ui";
 import PhoneInput from "@/components/PhoneInput";
+import { pinProblem as pinRule } from "@/lib/pin";
 import { usePoll } from "./usePoll";
 
 type Section = "menu" | "tables" | "team" | "settings" | "log";
@@ -392,7 +393,8 @@ function TeamSection({ meId }: { meId: number }) {
   const { data, reload } = usePoll<{ staff: StaffRow[] }>("/api/staff/team", 60000);
   const [f, setF] = useState({ name: "", phone: "", role: "waiter", pin: "" });
   const act = useAction();
-  const pinProblem = /\D/.test(f.pin) ? "PIN can only have digits" : null;
+  // Letters are flagged at once; length and easy PINs once four digits are in.
+  const pinProblem = f.pin && (/\D/.test(f.pin) || f.pin.length >= 4) ? pinRule(f.pin) : null;
   return (
     <div className="flex flex-col gap-4">
       <form
@@ -449,25 +451,84 @@ function TeamSection({ meId }: { meId: number }) {
       </form>
       {act.error && <Banner tone="error">{act.error}</Banner>}
       <ul className="divide-y divide-line rounded-2xl bg-white">
-        {data?.staff.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-            <span className={`flex-1 font-bold ${s.active ? "" : "text-ink-3 line-through"}`}>{s.name}</span>
-            <span className="w-32 text-sm text-ink-3">{s.phone}</span>
-            <span className="w-20 text-sm capitalize">{s.role}</span>
-            {s.id !== meId && (
-              <Button
-                variant="outline"
-                className="min-h-10"
-                disabled={act.busy}
-                onClick={() => act.run(async () => api(`/api/staff/team/${s.id}`, { method: "PATCH", body: { active: !s.active } }).then(reload))}
-              >
-                {s.active ? "Switch off" : "Switch on"}
-              </Button>
-            )}
-          </li>
-        ))}
+        {data?.staff.map((s) => <StaffItem key={s.id} s={s} meId={meId} reload={reload} />)}
       </ul>
     </div>
+  );
+}
+
+function StaffItem({ s, meId, reload }: { s: StaffRow; meId: number; reload: () => Promise<unknown> }) {
+  const act = useAction();
+  const [pin, setPin] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const sending = useRef(false);
+  const problem = pin && (/\D/.test(pin) || pin.length >= 4) ? pinRule(pin) : null;
+  const fieldId = `staff-${s.id}-pin`;
+  return (
+    <li className="flex flex-col gap-2 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`flex-1 font-bold ${s.active ? "" : "text-ink-3 line-through"}`}>{s.name}</span>
+        <span className="w-32 text-sm text-ink-3">{s.phone}</span>
+        <span className="w-20 text-sm capitalize">{s.role}</span>
+        <Button variant="outline" className="min-h-10" disabled={act.busy} onClick={() => { setPin(pin === null ? "" : null); setSaved(false); }}>
+          {pin === null ? "New PIN" : "Close"}
+        </Button>
+        {s.id !== meId && (
+          <Button
+            variant="outline"
+            className="min-h-10"
+            disabled={act.busy}
+            onClick={() => act.run(async () => api(`/api/staff/team/${s.id}`, { method: "PATCH", body: { active: !s.active } }).then(reload))}
+          >
+            {s.active ? "Switch off" : "Switch on"}
+          </Button>
+        )}
+      </div>
+      {pin !== null && (
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (sending.current || pinRule(pin)) return;
+            sending.current = true;
+            const ok = await act.run(async () => api(`/api/staff/team/${s.id}`, { method: "PATCH", body: { pin } }));
+            sending.current = false;
+            if (ok) {
+              setPin(null);
+              setSaved(true);
+            }
+          }}
+        >
+          <label className={label} htmlFor={fieldId}>
+            New PIN for {s.name} (4 to 6 digits)
+            <input
+              id={fieldId}
+              className={`${input} w-32 ${problem ? "border-nonveg" : ""}`}
+              required
+              inputMode="numeric"
+              autoComplete="off"
+              minLength={4}
+              maxLength={6}
+              pattern="\d{4,6}"
+              title="4 to 6 digits"
+              aria-invalid={!!problem}
+              aria-describedby={problem ? `${fieldId}-error` : undefined}
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+            />
+            {problem && (
+              <span id={`${fieldId}-error`} role="alert" className="text-[12px] font-semibold text-nonveg">
+                {problem}
+              </span>
+            )}
+          </label>
+          <Button disabled={act.busy || !!problem}>Save PIN</Button>
+          <span className="text-[12px] text-ink-3">Signs {s.id === meId ? "your other devices" : "them"} out everywhere.</span>
+        </form>
+      )}
+      {saved && <Banner tone="ok">{s.id === meId ? "Your new PIN is saved." : `New PIN saved. Give it to ${s.name} in person, not in a group chat.`}</Banner>}
+      {act.error && <Banner tone="error">{act.error}</Banner>}
+    </li>
   );
 }
 
@@ -533,6 +594,7 @@ const ACTIONS: Record<string, string> = {
   "staff.added": "added a staff member",
   "staff.enabled": "switched on a staff login",
   "staff.disabled": "switched off a staff login",
+  "staff.pin_reset": "set a new PIN for a staff member",
   "staff.login": "signed in",
   "guest.login_phone": "signed in with mobile",
   "guest.login_google": "signed in with Google",

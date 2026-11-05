@@ -34,7 +34,7 @@ npm run db:seed                 # 2 restaurants, 10 tables each, a sample menu, 
 npm run dev
 ```
 
-Open http://localhost:3000/staff/login and sign in with `SEED_MANAGER_PHONE` and `SEED_MANAGER_PIN`. Go to **Manage → Tables & QR → Print QR cards** and open any card's link to see the guest side. With `DEV_SHOW_OTP=1`, mobile login shows the code on screen instead of sending an SMS. This never happens on the live site.
+Open http://localhost:3000/staff/login and sign in with `SEED_MANAGER_PHONE` and `SEED_MANAGER_PIN`. On the live site there is no shared login: placeholder numbers like 9999999999 can't sign in there, each person gets their own login under **Manage → Staff**, and **New PIN** on a staff row changes a PIN and signs that person out everywhere. Go to **Manage → Tables & QR → Print QR cards** and open any card's link to see the guest side. With `DEV_SHOW_OTP=1`, mobile login shows the code on screen instead of sending an SMS. This never happens on the live site.
 
 ## Checks
 
