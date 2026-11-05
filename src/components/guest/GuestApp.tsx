@@ -58,6 +58,7 @@ export default function GuestApp(props: Props) {
   const [note, setNote] = useState("");
   const [guest, setGuest] = useState(props.guest);
   const [orders, setOrders] = useState<GuestOrdersResponse | null>(null);
+  const [paidOut, setPaidOut] = useState(false);
 
   const dishById = useMemo(() => {
     const m = new Map<number, Dish>();
@@ -115,8 +116,17 @@ export default function GuestApp(props: Props) {
     if (!guest) return;
     try {
       setOrders(await api<GuestOrdersResponse>(`/api/t/${token}/orders`));
-    } catch {
-      /* keep the last good data; poll again soon */
+    } catch (err) {
+      // The session ends when the bill is paid. Sign the guest out on this screen too.
+      if ((err as { status?: number }).status === 401) {
+        setGuest(null);
+        setOrders(null);
+        setCart({});
+        setNote("");
+        setPaidOut(true);
+        setScreen("menu");
+      }
+      /* otherwise keep the last good data; poll again soon */
     }
   }, [guest, token]);
 
@@ -144,6 +154,17 @@ export default function GuestApp(props: Props) {
 
   return (
     <main className="mx-auto min-h-dvh max-w-[560px] bg-sand shadow-[0_0_0_1px_rgba(0,0,0,0.03)]">
+      {paidOut && (
+        <div role="status" className="flex items-start gap-3 bg-palm-700 px-5 py-4 text-white">
+          <div className="flex-1">
+            <p className="font-bold">Your bill is paid. Thank you for dining with us!</p>
+            <p className="text-sm text-[#D5E3DC]">You have been signed out. To order again, sign in again.</p>
+          </div>
+          <button onClick={() => setPaidOut(false)} className="min-h-11 px-2 text-sm font-semibold text-marigold">
+            Close
+          </button>
+        </div>
+      )}
       {screen === "menu" && (
         <MenuScreen
           restaurant={props.restaurant}
@@ -197,20 +218,13 @@ export default function GuestApp(props: Props) {
           loginFailed={props.loginFailed}
           onBack={() => setScreen(cartCount > 0 ? "cart" : "menu")}
           onDone={(g) => {
+            setPaidOut(false);
             setGuest(g);
             setScreen(cartCount > 0 ? "cart" : "menu");
           }}
         />
       )}
-      {screen === "orders" && (
-        <OrdersScreen
-          token={token}
-          table={props.table}
-          data={orders}
-          refresh={refreshOrders}
-          onMenu={() => setScreen("menu")}
-        />
-      )}
+      {screen === "orders" && <OrdersScreen token={token} table={props.table} data={orders} refresh={refreshOrders} onMenu={() => setScreen("menu")} />}
     </main>
   );
 }

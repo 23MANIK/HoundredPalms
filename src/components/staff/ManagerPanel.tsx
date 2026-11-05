@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { formatRupees } from "@/lib/money";
 import { Banner, Button, DishImage, VegMark, api } from "@/components/ui";
+import PhoneInput from "@/components/PhoneInput";
 import { usePoll } from "./usePoll";
 
 type Section = "menu" | "tables" | "team" | "settings" | "log";
@@ -395,7 +396,7 @@ function TeamSection({ meId }: { meId: number }) {
         </label>
         <label className={label}>
           Mobile number
-          <input className={input} required type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+          <PhoneInput id="staff-new-phone" className={input} required value={f.phone} onChange={(phone) => setF({ ...f, phone })} />
         </label>
         <label className={label}>
           Role

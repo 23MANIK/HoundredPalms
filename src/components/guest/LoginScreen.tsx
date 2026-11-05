@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Banner, PalmLogo, api } from "@/components/ui";
+import PhoneInput from "@/components/PhoneInput";
+import { isValidPhone } from "@/lib/phone";
 
 type Props = {
   token: string;
@@ -46,7 +48,7 @@ export default function LoginScreen(p: Props) {
       setCode("");
       setStep("code");
     });
-  const phoneReady = phone.replace(/\D/g, "").length >= 10;
+  const phoneReady = isValidPhone(phone);
 
   const verify = () =>
     run(async () => {
@@ -111,15 +113,12 @@ export default function LoginScreen(p: Props) {
               <label htmlFor="phone" className="text-[13px] font-semibold text-ink-2">
                 Mobile number
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <span className="flex h-[52px] items-center rounded-[14px] border-[1.5px] border-line px-3.5 font-semibold">+91</span>
-                <input
+                <PhoneInput
                   id="phone"
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={setPhone}
                   placeholder="98765 43210"
                   className="h-[52px] min-w-0 flex-1 rounded-[14px] border-[1.5px] border-line px-4 text-base outline-none focus:border-palm-700"
                 />

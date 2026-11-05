@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Banner, PalmLogo, api } from "@/components/ui";
+import PhoneInput from "@/components/PhoneInput";
+import { isValidPhone } from "@/lib/phone";
 
 export default function StaffLogin() {
   const router = useRouter();
@@ -38,12 +40,11 @@ export default function StaffLogin() {
         {error && <Banner tone="error">{error}</Banner>}
         <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink-2">
           Mobile number
-          <input
-            type="tel"
-            inputMode="numeric"
+          <PhoneInput
+            id="staff-phone"
             autoComplete="username"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={setPhone}
             className="h-12 rounded-xl border-[1.5px] border-line px-4 text-base font-normal text-ink outline-none focus:border-palm-700"
           />
         </label>
@@ -59,7 +60,7 @@ export default function StaffLogin() {
             className="h-12 rounded-xl border-[1.5px] border-line px-4 text-base tracking-[0.3em] text-ink outline-none focus:border-palm-700"
           />
         </label>
-        <button disabled={busy || !phone || pin.length < 4} className="h-12 rounded-xl bg-palm-700 font-bold text-white disabled:opacity-50">
+        <button disabled={busy || !isValidPhone(phone) || pin.length < 4} className="h-12 rounded-xl bg-palm-700 font-bold text-white disabled:opacity-50">
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>

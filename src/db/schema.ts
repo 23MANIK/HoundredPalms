@@ -85,6 +85,8 @@ export const guests = pgTable("guests", {
   email: text("email"),
   googleSub: text("google_sub").unique(),
   phone: text("phone").unique(),
+  // Bumped when the guest's bill is paid, which signs them out on every device.
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
