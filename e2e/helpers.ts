@@ -99,3 +99,56 @@ export async function freeTable(api: APIRequestContext, t: TableLink): Promise<b
   expect(close.ok(), `closing the test table's bill: ${await close.text()}`).toBeTruthy();
   return true;
 }
+
+/** Saved logins for each staff role, made by global setup on a local copy only. */
+export const ROLE_STATE = (role: "waiter" | "kitchen" | "cashier") => path.join(STATE_DIR, `${role}.json`);
+export const TEST_ROLES = [
+  { role: "waiter", name: "E2E Waiter", phone: "9100000001" },
+  { role: "kitchen", name: "E2E Kitchen", phone: "9100000002" },
+  { role: "cashier", name: "E2E Cashier", phone: "9100000003" },
+] as const;
+export const TEST_ROLE_PIN = "4826";
+
+/** True when the checks run against the live site or a preview, not a local copy. */
+export const isRemote = () => !!process.env.E2E_BASE_URL;
+
+/**
+ * On a local copy, makes each guest look like a different phone. The server
+ * allows 10 login codes per device an hour, and every local check comes from
+ * 127.0.0.1. The live site takes the address from Vercel, so this does nothing there.
+ */
+export function newDeviceHeaders(): Record<string, string> {
+  if (isRemote()) return {};
+  return { "x-real-ip": `10.${rnd()}.${rnd()}.${rnd()}` };
+}
+const rnd = () => Math.floor(Math.random() * 254) + 1;
+
+/**
+ * Signs a guest in through the API the way the app does it: ask for a code
+ * "from the waiter", read it from the waiter's code list, verify it, set a name.
+ * The guest's cookie lands in `guest`, which can be a page's own request context.
+ */
+export async function guestLogin(guest: APIRequestContext, staff: APIRequestContext, t: TableLink, name: string | null = TEST_GUEST) {
+  const phone = randomPhone();
+  const token = t.path.split("/").pop()!;
+  const ask = await guest.post("/api/auth/otp/request", { data: { phone, via: "waiter", token }, headers: newDeviceHeaders() });
+  expect(ask.ok(), `asking for a login code: ${await ask.text()}`).toBeTruthy();
+  const codes = (await (await staff.get("/api/staff/login-codes")).json()) as {
+    codes: { code: string; phoneLast4: string; table: { number: number }; restaurant: { name: string } }[];
+  };
+  const mine = codes.codes.find((c) => c.phoneLast4 === phone.slice(-4) && c.table.number === t.number && c.restaurant.name === t.restaurant);
+  expect(mine, "the waiter screen lists the guest's code").toBeTruthy();
+  const verify = await guest.post("/api/auth/otp/verify", { data: { phone, code: mine!.code } });
+  expect(verify.ok(), `verifying the code: ${await verify.text()}`).toBeTruthy();
+  if (name) await guest.post("/api/guest/name", { data: { name } });
+  return { phone, token };
+}
+
+export type MenuItem = { id: number; name: string; pricePaise: number; isVeg: boolean; inStock: boolean; archived?: boolean };
+
+/** Dishes a guest can order at this table (veg only in the pure-veg restaurant). */
+export async function orderableDishes(staff: APIRequestContext, t: TableLink): Promise<MenuItem[]> {
+  const { items } = (await (await staff.get("/api/staff/menu")).json()) as { items: MenuItem[] };
+  const vegOnly = /ground floor/i.test(t.restaurant);
+  return items.filter((i) => i.inStock && !i.archived && (!vegOnly || i.isVeg));
+}

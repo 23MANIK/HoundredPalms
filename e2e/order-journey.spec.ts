@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
-import { STAFF_STATE, TEST_CANCEL_REASON, TEST_GUEST, bypassHeaders, freeTable, randomPhone, testTable } from "./helpers";
+import { STAFF_STATE, TEST_CANCEL_REASON, TEST_GUEST, bypassHeaders, freeTable, newDeviceHeaders, randomPhone, testTable } from "./helpers";
 
 /**
  * One full evening at a table, with a guest phone and a staff screen side by side:
@@ -52,6 +52,8 @@ test.describe("Full order journey", () => {
   test("guest orders, waiter approves, kitchen cooks, cashier bills", async ({ page: guest, browser }, info) => {
     const t = table();
     const phone = randomPhone();
+    const device = newDeviceHeaders();
+    if (Object.keys(device).length) await guest.setExtraHTTPHeaders({ ...bypassHeaders(), ...device });
     const staffCtx = await staffContext(browser, info);
     const staff = await staffCtx.newPage();
     const waiterCard = (orderId: number) => staff.locator("article").filter({ hasText: `#${orderId} ·` });
