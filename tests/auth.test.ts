@@ -1,10 +1,12 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { staff } from "@/db/schema";
 import { closeDb } from "@/db";
 import {
   createOtp,
   guestSessionToken,
   listWaiterCodes,
   loadGuest,
+  loadStaff,
   normalizeIndianPhone,
   readSession,
   readSessionClaims,
@@ -12,7 +14,10 @@ import {
   staffLogin,
   verifyOtp,
 } from "@/lib/auth";
-import { approveOrder, closeTab, placeOrder } from "@/lib/domain";
+import { addStaff, approveOrder, closeTab, placeOrder, resetStaffPin } from "@/lib/domain";
+import { hashPin } from "@/lib/crypto";
+import { isPlaceholderPhone } from "@/lib/live-site";
+import { pinProblem } from "@/lib/pin";
 import { phoneProblem, readPhoneInput } from "@/lib/phone";
 import { fixture } from "./helpers";
 
@@ -106,6 +111,53 @@ describe("staff login", () => {
     expect(s.role).toBe("waiter");
     for (let i = 0; i < 5; i++) await expect(staffLogin(f.db, "+919000000001", "0000")).rejects.toThrow(/wrong/);
     await expect(staffLogin(f.db, "+919000000001", "1234")).rejects.toThrow(/Too many/);
+  });
+});
+
+describe("no shared default staff login on the live site", () => {
+  const liveSite = () => vi.stubEnv("VERCEL_ENV", "production");
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("spots placeholder numbers like 9999999999", () => {
+    expect(isPlaceholderPhone("+919999999999")).toBe(true);
+    expect(isPlaceholderPhone("8888888888")).toBe(true);
+    expect(isPlaceholderPhone("+919000000004")).toBe(false);
+  });
+
+  it("refuses a placeholder number on the live site, even with the right PIN", async () => {
+    const [s] = await f.db.insert(staff).values({ name: "Manager", phone: "+919999999999", pinHash: await hashPin("1234"), role: "manager" }).returning();
+    expect((await staffLogin(f.db, s.phone, "1234")).id).toBe(s.id);
+    liveSite();
+    await expect(staffLogin(f.db, s.phone, "1234")).rejects.toThrow(/wrong/);
+  });
+
+  it("won't add a staff login with a placeholder number on the live site", async () => {
+    liveSite();
+    await expect(addStaff(f.db, f.manager, { name: "Test", phone: "+919999999999", role: "manager", pinHash: "x" })).rejects.toThrow(/real mobile/);
+  });
+
+  it("refuses PINs that are easy to guess", () => {
+    for (const pin of ["1234", "0000", "4321", "123456", "999999", "0123"]) expect(pinProblem(pin)).toMatch(/easy to guess/);
+    expect(pinProblem("12a4")).toMatch(/only have digits/);
+    expect(pinProblem("123")).toMatch(/4 to 6/);
+    expect(pinProblem("4826")).toBeNull();
+    expect(pinProblem("1357")).toBeNull();
+  });
+});
+
+describe("resetting a staff PIN", () => {
+  it("only a manager can do it, and the old PIN and old sessions stop working", async () => {
+    await expect(resetStaffPin(f.db, f.waiter, f.cashier.id, await hashPin("4826"))).rejects.toThrow(/permission/);
+    const before = await staffLogin(f.db, "+919000000001", "1234");
+    const oldSession = { id: before.id, v: before.sessionVersion };
+    expect(await loadStaff(f.db, oldSession)).not.toBeNull();
+
+    const v = await resetStaffPin(f.db, f.manager, f.waiter.id, await hashPin("4826"));
+    expect(v).toBe(before.sessionVersion + 1);
+    expect(await loadStaff(f.db, oldSession)).toBeNull();
+    await expect(staffLogin(f.db, "+919000000001", "1234")).rejects.toThrow(/wrong/);
+    const after = await staffLogin(f.db, "+919000000001", "4826");
+    expect(await loadStaff(f.db, { id: after.id, v: after.sessionVersion })).not.toBeNull();
   });
 });
 

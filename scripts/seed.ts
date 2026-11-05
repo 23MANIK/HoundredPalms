@@ -3,11 +3,16 @@ import { diningTables, menuCategories, menuItems, restaurants, settings, staff }
 import { hashPin, newQrToken } from "../src/lib/crypto";
 import { normalizeIndianPhone } from "../src/lib/auth";
 import { SAMPLE_MENU, SAMPLE_CATEGORIES } from "../src/lib/sample-menu";
+import { isLiveSite, isPlaceholderPhone } from "../src/lib/live-site";
+import { pinProblem } from "../src/lib/pin";
 
 /**
  * Seeds an empty database with the two restaurants, 10 sample tables each,
  * the sample menu and the first manager login. Safe to run twice: it stops
  * if restaurants already exist.
+ *
+ * On the live site the first manager must use a real mobile number and a PIN
+ * that is not easy to guess, so no shared default login is ever created there.
  */
 async function main() {
   const db = getDb();
@@ -20,6 +25,11 @@ async function main() {
   const phoneRaw = process.env.SEED_MANAGER_PHONE;
   if (!pin || !/^\d{4,6}$/.test(pin) || !phoneRaw) {
     throw new Error("Set SEED_MANAGER_PHONE and SEED_MANAGER_PIN (4 to 6 digits) before seeding");
+  }
+  if (isLiveSite()) {
+    if (isPlaceholderPhone(phoneRaw)) throw new Error("On the live site SEED_MANAGER_PHONE must be the manager's real mobile number");
+    const problem = pinProblem(pin);
+    if (problem) throw new Error(`On the live site SEED_MANAGER_PIN must be safe: ${problem}`);
   }
 
   await db.transaction(async (tx) => {

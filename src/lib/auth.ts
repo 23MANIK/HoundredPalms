@@ -5,6 +5,7 @@ import { guests, otpCodes, staff, auditLog, diningTables, restaurants } from "@/
 import { DomainError, type GuestActor, type StaffActor } from "./domain";
 import { newOtp, sha256, verifyPin } from "./crypto";
 import { phoneProblem, readPhoneInput } from "./phone";
+import { isLiveSite, isPlaceholderPhone } from "./live-site";
 
 export const GUEST_COOKIE = "hp_guest";
 export const STAFF_COOKIE = "hp_staff";
@@ -62,10 +63,11 @@ export async function loadGuest(db: DB, session: { id: number; v: number } | nul
   return { kind: "guest", id: g.id, name: g.name || g.phone || g.email || "Guest" };
 }
 
-export async function loadStaff(db: DB, id: number | null): Promise<StaffActor | null> {
-  if (!id) return null;
-  const s = await db.query.staff.findFirst({ where: eq(staff.id, id) });
-  if (!s || !s.active) return null;
+export async function loadStaff(db: DB, session: { id: number; v: number } | null): Promise<StaffActor | null> {
+  if (!session) return null;
+  const s = await db.query.staff.findFirst({ where: eq(staff.id, session.id) });
+  // A new PIN bumps the version, so cookies from before it stop working.
+  if (!s || !s.active || s.sessionVersion !== session.v) return null;
   return { kind: "staff", id: s.id, name: s.name, role: s.role };
 }
 
@@ -235,9 +237,10 @@ export async function sendOtpSms(phone: string, code: string) {
 const STAFF_MAX_FAILS = 5;
 const STAFF_LOCK_MS = 15 * 60_000;
 
-export async function staffLogin(db: DB, phone: string, pin: string): Promise<StaffActor> {
-  const s = await db.query.staff.findFirst({ where: eq(staff.phone, phone) });
+export async function staffLogin(db: DB, phone: string, pin: string): Promise<StaffActor & { sessionVersion: number }> {
   const generic = new DomainError("Mobile number or PIN is wrong", 401);
+  if (isLiveSite() && isPlaceholderPhone(phone)) throw generic;
+  const s = await db.query.staff.findFirst({ where: eq(staff.phone, phone) });
   if (!s || !s.active) throw generic;
   if (s.lockedUntil && s.lockedUntil > new Date()) {
     throw new DomainError("Too many wrong PINs. Try again in 15 minutes or ask the manager.", 429);
@@ -253,9 +256,5 @@ export async function staffLogin(db: DB, phone: string, pin: string): Promise<St
   }
   await db.update(staff).set({ failedLogins: 0, lockedUntil: null }).where(eq(staff.id, s.id));
   await db.insert(auditLog).values({ actorType: "staff", actorId: s.id, actorName: s.name, action: "staff.login" });
-  return { kind: "staff", id: s.id, name: s.name, role: s.role };
-}
-
-export function isValidPin(pin: string) {
-  return /^\d{4,6}$/.test(pin);
+  return { kind: "staff", id: s.id, name: s.name, role: s.role, sessionVersion: s.sessionVersion };
 }

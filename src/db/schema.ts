@@ -99,6 +99,8 @@ export const staff = pgTable("staff", {
   active: boolean("active").notNull().default(true),
   failedLogins: integer("failed_logins").notNull().default(0),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  // Bumped when the PIN is reset, which signs out every device using the old one.
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
