@@ -9,9 +9,36 @@ export function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  phone: "Mobile number",
+  pin: "PIN",
+  code: "Code",
+  email: "Email",
+  description: "Description",
+  priceRupees: "Price",
+  imageUrl: "Photo link",
+  number: "Table number",
+  seats: "Seats",
+  gstPercent: "GST",
+  discountPct: "Discount",
+  paymentMethod: "Payment method",
+  reason: "Reason",
+  note: "Cooking instructions",
+  qty: "Quantity",
+  lines: "Order",
+};
+
+/** Names the field that failed, so the person knows what to fix. */
+export function zodMessage(err: z.ZodError) {
+  const field = err.issues[0]?.path.filter((p): p is string => typeof p === "string").at(-1);
+  const label = field ? FIELD_LABELS[field] : undefined;
+  return label ? `${label} is missing or not valid` : "Some details are missing or not valid";
+}
+
 export function errorResponse(err: unknown) {
   if (err instanceof DomainError) return json({ error: err.message }, err.status);
-  if (err instanceof z.ZodError) return json({ error: "Some details are missing or not valid" }, 400);
+  if (err instanceof z.ZodError) return json({ error: zodMessage(err) }, 400);
   console.error(err);
   return json({ error: "Something went wrong. Please try again." }, 500);
 }

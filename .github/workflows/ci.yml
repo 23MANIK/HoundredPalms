@@ -2,8 +2,11 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
+  # By hand, for a branch that combines several PRs (see the checkpoint-qa skill).
+  workflow_dispatch:
 
 jobs:
   check:
@@ -40,7 +43,10 @@ jobs:
 
   # Clicks through the whole app (guest phone + staff screens) on a fresh copy
   # of the app with its own database, on a phone and a laptop screen size.
+  # The slow run happens on main, by hand, or on a PR labelled "run-e2e", so
+  # several PRs in flight can share one combined run instead of one each.
   e2e:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-e2e')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:

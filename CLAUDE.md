@@ -15,4 +15,7 @@ When a change adds or changes a screen or a rule, add or update a check in `e2e/
 ## Working rules
 
 - Screenshots and images from browser runs go to a subagent with `model: "haiku"`, which describes them. The main session never reads them itself.
+- Any form, input or API body follows `.claude/skills/form-validation/SKILL.md`. Run the `form-auditor` agent after changing forms.
+- Use the cheapest model the task needs. Haiku for simple subagent work (running checks, reading screenshots), Sonnet for code review and audits.
+- Batch slow end-to-end runs when several PRs are in flight and nothing is urgent (see the `checkpoint-qa` skill).
 - Package any long procedure that will be reused (like the checkpoint run) as a skill in `.claude/skills/`.

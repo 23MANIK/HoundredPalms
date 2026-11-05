@@ -151,14 +151,17 @@ test.describe("Full order journey", () => {
       await guest.getByRole("button", { name: "Order more" }).click();
       await addDish(guest, [dishA, dishB]);
       await guest.getByRole("button", { name: /1 item.*View cart/ }).click();
-      await guest.getByRole("button", { name: /^Place order · ₹/ }).click();
+      // A double tap must place one order, not two.
+      await guest.getByRole("button", { name: /^Place order · ₹/ }).dblclick();
       await expect(guest.getByText("Waiting for your waiter to confirm")).toBeVisible();
       secondId = await newestOrderId(guest);
       expect(secondId).toBeGreaterThan(orderId);
+      await expect(guest.getByText(/^Order #\d+/), "one order per tap, even on a double tap").toHaveCount(2);
 
       await staff.getByRole("tab", { name: /^New/ }).click();
       const card = waiterCard(secondId);
       await card.getByRole("button", { name: "Cancel order (guest asked)" }).click();
+      await expect(card.getByLabel("Why is this order being cancelled?")).toHaveAttribute("maxlength", "200");
       await card.getByLabel("Why is this order being cancelled?").fill(TEST_CANCEL_REASON);
       await card.getByRole("button", { name: "Cancel order", exact: true }).click();
       await expect(guest.getByText("This order was cancelled")).toBeVisible();
@@ -185,10 +188,17 @@ test.describe("Full order journey", () => {
       const total = bill.getByText("Total", { exact: true }).locator("xpath=following-sibling::span");
       expect(rupees(await total.textContent()), "cashier total matches the guest's bill").toBeCloseTo(guestTotal, 2);
 
-      // 100% discount so test runs never count as sales.
-      await bill.getByLabel(/^Discount/).fill("100");
-      await expect(total).toHaveText("₹0");
+      // A bad discount is explained, not quietly changed.
+      const discount = bill.getByLabel(/^Discount/);
+      await discount.fill("12.5");
+      await expect(bill.getByRole("alert").filter({ hasText: "whole number" })).toBeVisible();
+      await expect(discount).toHaveValue("12.5");
       await bill.getByRole("radio", { name: "cash" }).click();
+      await expect(bill.getByRole("button", { name: "Mark paid by CASH · close table" })).toBeDisabled();
+
+      // 100% discount so test runs never count as sales.
+      await discount.fill("100");
+      await expect(total).toHaveText("₹0");
       await bill.getByRole("button", { name: "Mark paid by CASH · close table" }).click();
       await expect(staff.getByText(`Table ${t.number} paid`)).toBeVisible();
     });

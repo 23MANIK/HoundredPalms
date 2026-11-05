@@ -229,7 +229,7 @@ function DishForm({
       </label>
       <label className={label}>
         Price (₹, before GST)
-        <input className={input} required type="number" min={0} step="0.5" inputMode="decimal" value={f.priceRupees} onChange={(e) => setF({ ...f, priceRupees: e.target.value })} />
+        <input className={input} required type="number" min={0} max={100000} step="0.5" inputMode="decimal" value={f.priceRupees} onChange={(e) => setF({ ...f, priceRupees: e.target.value })} />
       </label>
       <div className="flex items-end gap-5 pb-2">
         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
@@ -255,6 +255,10 @@ function DishForm({
             className={`${input} min-w-0 flex-1`}
             placeholder="or paste a photo link (https://…)"
             aria-label="Photo link"
+            type="url"
+            pattern="https://.+"
+            title="The link must start with https://"
+            maxLength={500}
             value={f.imageUrl}
             onChange={(e) => setF({ ...f, imageUrl: e.target.value })}
           />
@@ -315,11 +319,11 @@ function TablesSection({ restaurants }: { restaurants: Restaurant[] }) {
         </label>
         <label className={label}>
           Table number
-          <input className={`${input} w-28`} required type="number" min={1} value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} />
+          <input className={`${input} w-28`} required type="number" min={1} max={999} step={1} inputMode="numeric" value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} />
         </label>
         <label className={label}>
           Seats
-          <input className={`${input} w-24`} required type="number" min={1} max={40} value={form.seats} onChange={(e) => setForm({ ...form, seats: e.target.value })} />
+          <input className={`${input} w-24`} required type="number" min={1} max={40} step={1} inputMode="numeric" value={form.seats} onChange={(e) => setForm({ ...form, seats: e.target.value })} />
         </label>
         <Button disabled={act.busy}>Add table</Button>
       </form>
@@ -339,11 +343,22 @@ function TablesSection({ restaurants }: { restaurants: Restaurant[] }) {
                       type="number"
                       min={1}
                       max={40}
+                      step={1}
+                      inputMode="numeric"
                       defaultValue={t.seats}
                       aria-label={`Seats at table ${t.number}`}
                       onBlur={(e) => {
-                        const seats = Number(e.target.value);
-                        if (seats !== t.seats) act.run(async () => api(`/api/staff/tables/${t.id}`, { method: "PATCH", body: { seats } }).then(reload));
+                        const el = e.target;
+                        const seats = Number(el.value);
+                        if (seats === t.seats) return;
+                        if (!el.checkValidity() || !el.value) {
+                          act.run(async () => {
+                            throw new Error(`Table ${t.number}: seats must be a whole number from 1 to 40`);
+                          });
+                          el.value = String(t.seats);
+                          return;
+                        }
+                        act.run(async () => api(`/api/staff/tables/${t.id}`, { method: "PATCH", body: { seats } }).then(reload));
                       }}
                       className="h-9 w-16 rounded-lg border-[1.5px] border-line px-2"
                     />
@@ -376,6 +391,7 @@ function TeamSection({ meId }: { meId: number }) {
   const { data, reload } = usePoll<{ staff: StaffRow[] }>("/api/staff/team", 60000);
   const [f, setF] = useState({ name: "", phone: "", role: "waiter", pin: "" });
   const act = useAction();
+  const pinProblem = /\D/.test(f.pin) ? "PIN can only have digits" : null;
   return (
     <div className="flex flex-col gap-4">
       <form
@@ -391,7 +407,7 @@ function TeamSection({ meId }: { meId: number }) {
       >
         <label className={label}>
           Name
-          <input className={input} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          <input className={input} required maxLength={60} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         </label>
         <label className={label}>
           Mobile number
@@ -408,9 +424,27 @@ function TeamSection({ meId }: { meId: number }) {
         </label>
         <label className={label}>
           PIN (4 to 6 digits)
-          <input className={`${input} w-32`} required inputMode="numeric" maxLength={6} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.replace(/\D/g, "") })} />
+          <input
+            className={`${input} w-32 ${pinProblem ? "border-nonveg" : ""}`}
+            required
+            inputMode="numeric"
+            autoComplete="off"
+            minLength={4}
+            maxLength={6}
+            pattern="\d{4,6}"
+            title="4 to 6 digits"
+            aria-invalid={!!pinProblem}
+            aria-describedby={pinProblem ? "pin-error" : undefined}
+            value={f.pin}
+            onChange={(e) => setF({ ...f, pin: e.target.value })}
+          />
+          {pinProblem && (
+            <span id="pin-error" role="alert" className="text-[12px] font-semibold text-nonveg">
+              {pinProblem}
+            </span>
+          )}
         </label>
-        <Button disabled={act.busy}>Add staff</Button>
+        <Button disabled={act.busy || !!pinProblem}>Add staff</Button>
       </form>
       {act.error && <Banner tone="error">{act.error}</Banner>}
       <ul className="divide-y divide-line rounded-2xl bg-white">
@@ -458,7 +492,7 @@ function SettingsSection() {
     >
       <label className={label}>
         GST on food (%)
-        <input className={input} type="number" step="0.5" min={0} max={28} value={value ?? data.gstPercent} onChange={(e) => setValue(e.target.value)} />
+        <input className={input} required type="number" step="0.5" min={0} max={28} inputMode="decimal" value={value ?? data.gstPercent} onChange={(e) => setValue(e.target.value)} />
       </label>
       <p className="text-sm text-ink-3">Bills split this equally into CGST and SGST. 5% is the usual rate for restaurants. Check with your accountant before changing it.</p>
       {act.error && <Banner tone="error">{act.error}</Banner>}
