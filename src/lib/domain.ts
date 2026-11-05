@@ -497,7 +497,11 @@ export async function listActiveOrders(db: DB) {
   }));
 }
 
-export async function listTablesWithTabs(db: DB) {
+/**
+ * Active tables with their open bill, if any. Managers also get each table's
+ * QR link (`qrPath`); other staff don't need it.
+ */
+export async function listTablesWithTabs(db: DB, opts: { includeQr?: boolean } = {}) {
   const rows = await db
     .select({ table: diningTables, restaurant: restaurants, tab: tabs })
     .from(diningTables)
@@ -505,19 +509,16 @@ export async function listTablesWithTabs(db: DB) {
     .leftJoin(tabs, and(eq(tabs.tableId, diningTables.id), eq(tabs.status, "open")))
     .where(eq(diningTables.active, true))
     .orderBy(asc(restaurants.id), asc(diningTables.number));
-  const result = [];
-  for (const r of rows) {
-    let totalPaise = 0;
-    if (r.tab) totalPaise = (await getTabDetail(db, r.tab.id)).bill.totalPaise;
-    result.push({
-      id: r.table.id,
-      number: r.table.number,
-      seats: r.table.seats,
-      restaurant: { id: r.restaurant.id, name: r.restaurant.name },
-      tab: r.tab ? { id: r.tab.id, billRequested: !!r.tab.billRequestedAt, totalPaise } : null,
-    });
-  }
-  return result;
+  // Bill totals load side by side, so a busy evening doesn't make the list slow.
+  const totals = await Promise.all(rows.map((r) => (r.tab ? getTabDetail(db, r.tab.id).then((d) => d.bill.totalPaise) : 0)));
+  return rows.map((r, i) => ({
+    id: r.table.id,
+    number: r.table.number,
+    seats: r.table.seats,
+    restaurant: { id: r.restaurant.id, name: r.restaurant.name },
+    tab: r.tab ? { id: r.tab.id, billRequested: !!r.tab.billRequestedAt, totalPaise: totals[i] } : null,
+    ...(opts.includeQr ? { qrPath: `/t/${r.table.qrToken}` } : {}),
+  }));
 }
 
 export async function todaysSales(db: DB) {
@@ -649,6 +650,22 @@ export async function updateTable(db: DB, actor: StaffActor, id: number, input: 
     }
     await tx.update(diningTables).set(input).where(eq(diningTables.id, id));
     await audit(tx, actor, "table.updated", { tableId: id }, input);
+  });
+}
+
+/**
+ * Gives a table a new QR code. The old printed card stops working, so this is
+ * refused while the table has an open bill (guests there would lose the menu).
+ */
+export async function regenerateTableQr(db: DB, actor: StaffActor, id: number, qrToken: string) {
+  requireRole(actor, ["manager"]);
+  await db.transaction(async (tx) => {
+    const t = await tx.query.diningTables.findFirst({ where: eq(diningTables.id, id) });
+    if (!t || !t.active) throw new DomainError("Table not found", 404);
+    const open = await tx.query.tabs.findFirst({ where: and(eq(tabs.tableId, id), eq(tabs.status, "open")) });
+    if (open) throw new DomainError("This table has an open bill. Close it first.");
+    await tx.update(diningTables).set({ qrToken }).where(eq(diningTables.id, id));
+    await audit(tx, actor, "table.qr_regenerated", { tableId: id }, { number: t.number });
   });
 }
 

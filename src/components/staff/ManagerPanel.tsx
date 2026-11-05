@@ -283,16 +283,33 @@ function DishForm({
 
 // ---------- Tables ----------
 
-type TableRow = { id: number; number: number; seats: number; restaurant: Restaurant; tab: { id: number } | null };
+type TableRow = {
+  id: number;
+  number: number;
+  seats: number;
+  restaurant: Restaurant;
+  tab: { id: number; billRequested: boolean; totalPaise: number } | null;
+  qrPath?: string;
+};
+
+function tableStatus(t: TableRow) {
+  if (!t.tab) return { text: "Free", cls: "bg-palm-50 text-palm-700" };
+  if (t.tab.billRequested) return { text: `Bill asked · ${formatRupees(t.tab.totalPaise)}`, cls: "bg-marigold-50 text-marigold-900" };
+  return { text: `Bill open · ${formatRupees(t.tab.totalPaise)}`, cls: "bg-marigold-50 text-marigold-900" };
+}
 
 function TablesSection({ restaurants }: { restaurants: Restaurant[] }) {
-  const { data, reload } = usePoll<{ tables: TableRow[] }>("/api/staff/tables", 30000);
+  const { data, error, reload } = usePoll<{ tables: TableRow[] }>("/api/staff/tables", 30000);
   const [form, setForm] = useState({ restaurantId: restaurants[0]?.id ?? 0, number: "", seats: "4" });
+  const [notice, setNotice] = useState<string | null>(null);
   const act = useAction();
+  const tables = data?.tables ?? [];
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-3">Each table gets its own QR code. Print new cards after adding tables.</p>
+        <p className="text-sm text-ink-3">
+          {data ? `${tables.length} active ${tables.length === 1 ? "table" : "tables"}. ` : ""}Each table gets its own QR code. Print new cards after adding tables.
+        </p>
         <Link href="/staff/manager/qr" className="inline-flex min-h-11 items-center rounded-xl bg-palm-700 px-4 font-bold text-white">
           Print QR cards
         </Link>
@@ -329,57 +346,117 @@ function TablesSection({ restaurants }: { restaurants: Restaurant[] }) {
         <Button disabled={act.busy}>Add table</Button>
       </form>
       {act.error && <Banner tone="error">{act.error}</Banner>}
-      {restaurants.map((r) => (
-        <section key={r.id} className="rounded-2xl bg-white p-4">
-          <h2 className="pb-2 text-lg font-extrabold">{r.name}</h2>
-          <ul className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
-            {data?.tables
-              .filter((t) => t.restaurant.id === r.id)
-              .map((t) => (
-                <li key={t.id} className="flex items-center gap-2 rounded-xl border border-line px-3 py-2">
-                  <span className="w-16 font-extrabold">T{t.number}</span>
-                  <label className="flex items-center gap-1.5 text-sm text-ink-2">
-                    Seats
-                    <input
-                      type="number"
-                      min={1}
-                      max={40}
-                      step={1}
-                      inputMode="numeric"
-                      defaultValue={t.seats}
-                      aria-label={`Seats at table ${t.number}`}
-                      onBlur={(e) => {
-                        const el = e.target;
-                        const seats = Number(el.value);
-                        if (seats === t.seats) return;
-                        if (!el.checkValidity() || !el.value) {
-                          act.run(async () => {
-                            throw new Error(`Table ${t.number}: seats must be a whole number from 1 to 40`);
-                          });
-                          el.value = String(t.seats);
-                          return;
-                        }
-                        act.run(async () => api(`/api/staff/tables/${t.id}`, { method: "PATCH", body: { seats } }).then(reload));
-                      }}
-                      className="h-9 w-16 rounded-lg border-[1.5px] border-line px-2"
-                    />
-                  </label>
-                  <button
-                    className="ml-auto min-h-9 text-sm font-bold text-nonveg disabled:text-ink-3"
-                    disabled={act.busy || !!t.tab}
-                    title={t.tab ? "Close the open bill first" : undefined}
-                    onClick={() => {
-                      if (confirm(`Remove table ${t.number}? Its QR code will stop working.`))
-                        act.run(async () => api(`/api/staff/tables/${t.id}`, { method: "PATCH", body: { active: false } }).then(reload));
-                    }}
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-          </ul>
-        </section>
-      ))}
+      {notice && <Banner tone="ok">{notice}</Banner>}
+      {error && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Banner tone="error">Couldn&apos;t load the tables: {error}</Banner>
+          <Button variant="ghost" onClick={() => reload()}>
+            Try again
+          </Button>
+        </div>
+      )}
+      {!data && !error && (
+        <p role="status" className="rounded-2xl bg-white p-4 text-sm text-ink-3">
+          Loading tables…
+        </p>
+      )}
+      {data &&
+        restaurants.map((r) => {
+          const rows = tables.filter((t) => t.restaurant.id === r.id);
+          return (
+            <section key={r.id} aria-label={`${r.name} tables`} className="rounded-2xl bg-white p-4">
+              <h2 className="pb-2 text-lg font-extrabold">
+                {r.name} <span className="text-sm font-semibold text-ink-3">· {rows.length} {rows.length === 1 ? "table" : "tables"}</span>
+              </h2>
+              {rows.length === 0 ? (
+                <p className="text-sm text-ink-3">No tables yet. Add one above.</p>
+              ) : (
+                <ul className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
+                  {rows.map((t) => {
+                    const st = tableStatus(t);
+                    const busy = act.busy || !!t.tab;
+                    const why = t.tab ? "Close the open bill first" : undefined;
+                    return (
+                      <li key={t.id} data-testid="table-card" aria-label={`Table ${t.number}`} className="flex flex-col gap-2 rounded-xl border border-line px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-extrabold">Table {t.number}</span>
+                          <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-bold ${st.cls}`}>{st.text}</span>
+                        </div>
+                        <label className="flex items-center gap-1.5 text-sm text-ink-2">
+                          Seats
+                          <input
+                            type="number"
+                            min={1}
+                            max={40}
+                            step={1}
+                            inputMode="numeric"
+                            defaultValue={t.seats}
+                            aria-label={`Seats at table ${t.number}`}
+                            onBlur={(e) => {
+                              const el = e.target;
+                              const seats = Number(el.value);
+                              if (seats === t.seats) return;
+                              if (!el.checkValidity() || !el.value) {
+                                act.run(async () => {
+                                  throw new Error(`Table ${t.number}: seats must be a whole number from 1 to 40`);
+                                });
+                                el.value = String(t.seats);
+                                return;
+                              }
+                              act.run(async () => api(`/api/staff/tables/${t.id}`, { method: "PATCH", body: { seats } }).then(reload));
+                            }}
+                            className="h-9 w-16 rounded-lg border-[1.5px] border-line px-2"
+                          />
+                        </label>
+                        {t.qrPath && (
+                          <a
+                            href={t.qrPath}
+                            target="_blank"
+                            rel="noopener"
+                            aria-label={`Open table ${t.number} menu link`}
+                            className="truncate text-sm font-semibold text-palm-700 underline-offset-4 hover:underline"
+                          >
+                            Menu link: {t.qrPath}
+                          </a>
+                        )}
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            className="min-h-11 text-sm font-bold text-palm-700 disabled:text-ink-3"
+                            disabled={busy}
+                            title={why}
+                            onClick={() => {
+                              if (!confirm(`Make a new QR code for table ${t.number}? The printed card on the table will stop working, so print and replace it.`)) return;
+                              setNotice(null);
+                              act.run(async () => {
+                                await api(`/api/staff/tables/${t.id}`, { method: "PATCH", body: { regenerateQr: true } });
+                                await reload();
+                                setNotice(`Table ${t.number} has a new QR code. Print its card from "Print QR cards".`);
+                              });
+                            }}
+                          >
+                            New QR code
+                          </button>
+                          <button
+                            className="ml-auto min-h-11 text-sm font-bold text-nonveg disabled:text-ink-3"
+                            disabled={busy}
+                            title={why}
+                            onClick={() => {
+                              if (confirm(`Remove table ${t.number}? Its QR code will stop working.`))
+                                act.run(async () => api(`/api/staff/tables/${t.id}`, { method: "PATCH", body: { active: false } }).then(reload));
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        {t.tab && <p className="text-xs text-ink-3">Close the open bill before changing the QR code or removing this table.</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          );
+        })}
     </div>
   );
 }
