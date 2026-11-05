@@ -20,6 +20,7 @@ export default async function QrSheet() {
     rows.map(async (r) => ({
       id: r.table.id,
       number: r.table.number,
+      path: `/t/${r.table.qrToken}`,
       restaurant: r.restaurant.name,
       svg: await QRCode.toString(`${base}/t/${r.table.qrToken}`, { type: "svg", margin: 1, color: { dark: "#0D3A2B", light: "#FFFFFF" } }),
     })),
@@ -40,6 +41,15 @@ export default async function QrSheet() {
             <div className="w-full max-w-[180px]" dangerouslySetInnerHTML={{ __html: c.svg }} />
             <p className="text-2xl font-extrabold">Table {c.number}</p>
             <p className="text-xs text-ink-3">Scan to see the menu and order</p>
+            <a
+              href={c.path}
+              target="_blank"
+              rel="noopener"
+              aria-label={`Open ${c.restaurant} table ${c.number} menu`}
+              className="no-print min-h-11 content-center text-sm font-bold text-palm-700 underline-offset-4 hover:underline"
+            >
+              Open table page
+            </a>
           </div>
         ))}
       </div>

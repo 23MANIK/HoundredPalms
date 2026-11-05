@@ -45,3 +45,8 @@ next-env.d.ts
 .env.local
 .env*.local
 *.tsbuildinfo
+
+# end-to-end test output
+/e2e/.state/
+/playwright-report/
+/test-results/
