@@ -26,7 +26,7 @@ export const AUDIT_EVENTS = {
   "table.added": "added a table",
   "table.updated": "changed a table",
   "table.restored": "restored a table",
-  "table.qr_regenerated": "made a new QR code for a table",
+  "table.qr_regenerated": "gave a table a new QR code",
   "staff.added": "added a staff member",
   "staff.enabled": "switched on a staff login",
   "staff.disabled": "switched off a staff login",
