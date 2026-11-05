@@ -454,6 +454,10 @@ export async function closeTab(
         totalPaise: detail.bill.totalPaise,
       })
       .where(eq(tabs.id, tabId));
+    // The bill is settled, so sign out everyone who ordered on it.
+    await tx.execute(
+      sql`update guests set session_version = session_version + 1 where id in (select guest_id from orders where tab_id = ${tabId} and guest_id is not null)`,
+    );
     await audit(
       tx,
       actor,

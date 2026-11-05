@@ -6,7 +6,7 @@ import { STAFF_STATE, TEST_CANCEL_REASON, TEST_GUEST, bypassHeaders, freeTable, 
  * sign in with the waiter's code, order, waiter marks a dish unavailable, guest
  * drops it, waiter approves, kitchen cooks, waiter serves, a second order is
  * cancelled at the guest's request, guest asks for the bill, cashier closes it,
- * and the activity log shows who did what.
+ * the guest is signed out, and the activity log shows who did what.
  */
 
 const table = () => testTable();
@@ -191,6 +191,16 @@ test.describe("Full order journey", () => {
       await bill.getByRole("radio", { name: "cash" }).click();
       await bill.getByRole("button", { name: "Mark paid by CASH · close table" }).click();
       await expect(staff.getByText(`Table ${t.number} paid`)).toBeVisible();
+    });
+
+    await test.step("guest is signed out once the bill is paid", async () => {
+      await expect(guest.getByText("Your bill is paid. Thank you for dining with us!")).toBeVisible();
+      await expect(guest.getByRole("button", { name: "Sign in to order" })).toBeVisible();
+      // Still signed out after a reload: the old login no longer works.
+      await guest.reload();
+      await expect(guest.getByRole("button", { name: "Sign in to order" })).toBeVisible();
+      const res = await guest.request.get(`/api/t/${t.path.split("/").pop()}/orders`);
+      expect(res.status(), "old login is refused by the server").toBe(401);
     });
 
     await test.step("activity log records who did what", async () => {

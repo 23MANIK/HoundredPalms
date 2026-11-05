@@ -4,6 +4,7 @@ import type { DB } from "@/db";
 import { guests, otpCodes, staff, auditLog, diningTables, restaurants } from "@/db/schema";
 import { DomainError, type GuestActor, type StaffActor } from "./domain";
 import { newOtp, sha256, verifyPin } from "./crypto";
+import { phoneProblem, readPhoneInput } from "./phone";
 
 export const GUEST_COOKIE = "hp_guest";
 export const STAFF_COOKIE = "hp_staff";
@@ -18,8 +19,8 @@ function secretKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-export async function signSession(payload: { kind: "guest" | "staff"; id: number }, ttlSeconds: number) {
-  return new SignJWT({ kind: payload.kind })
+export async function signSession(payload: { kind: "guest" | "staff"; id: number; v?: number }, ttlSeconds: number) {
+  return new SignJWT({ kind: payload.kind, v: payload.v ?? 0 })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(String(payload.id))
     .setIssuedAt()
@@ -27,25 +28,37 @@ export async function signSession(payload: { kind: "guest" | "staff"; id: number
     .sign(secretKey());
 }
 
-export async function readSession(token: string | undefined, kind: "guest" | "staff"): Promise<number | null> {
+export async function readSessionClaims(token: string | undefined, kind: "guest" | "staff"): Promise<{ id: number; v: number } | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secretKey(), { algorithms: ["HS256"] });
     if (payload.kind !== kind || !payload.sub) return null;
     const id = Number(payload.sub);
-    return Number.isInteger(id) ? id : null;
+    const v = typeof payload.v === "number" ? payload.v : 0;
+    return Number.isInteger(id) ? { id, v } : null;
   } catch {
     return null;
   }
 }
 
+export async function readSession(token: string | undefined, kind: "guest" | "staff"): Promise<number | null> {
+  return (await readSessionClaims(token, kind))?.id ?? null;
+}
+
+/** A fresh guest cookie value, tied to the guest's current session version. */
+export async function guestSessionToken(db: DB, guestId: number) {
+  const g = await db.query.guests.findFirst({ where: eq(guests.id, guestId) });
+  return signSession({ kind: "guest", id: guestId, v: g?.sessionVersion ?? 0 }, guestTtlSeconds);
+}
+
 export const guestTtlSeconds = GUEST_TTL_DAYS * 24 * 3600;
 export const staffTtlSeconds = STAFF_TTL_HOURS * 3600;
 
-export async function loadGuest(db: DB, id: number | null): Promise<GuestActor | null> {
-  if (!id) return null;
-  const g = await db.query.guests.findFirst({ where: eq(guests.id, id) });
-  if (!g) return null;
+export async function loadGuest(db: DB, session: { id: number; v: number } | null): Promise<GuestActor | null> {
+  if (!session) return null;
+  const g = await db.query.guests.findFirst({ where: eq(guests.id, session.id) });
+  // A paid bill bumps the version, so older cookies stop working.
+  if (!g || g.sessionVersion !== session.v) return null;
   return { kind: "guest", id: g.id, name: g.name || g.phone || g.email || "Guest" };
 }
 
@@ -60,10 +73,12 @@ export async function loadStaff(db: DB, id: number | null): Promise<StaffActor |
 
 /** Accepts Indian mobile numbers with or without +91 / 0, returns +91XXXXXXXXXX. */
 export function normalizeIndianPhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  const ten = digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits.length === 11 && digits.startsWith("0") ? digits.slice(1) : digits;
-  if (!/^[6-9]\d{9}$/.test(ten)) throw new DomainError("Enter a valid 10-digit Indian mobile number");
-  return `+91${ten}`;
+  // Same rules as the screens: letters are refused, never stripped.
+  const r = readPhoneInput(raw);
+  if (r.error) throw new DomainError(r.error);
+  const problem = phoneProblem(r.digits);
+  if (problem) throw new DomainError(problem);
+  return `+91${r.digits}`;
 }
 
 // ---------- Guest OTP ----------

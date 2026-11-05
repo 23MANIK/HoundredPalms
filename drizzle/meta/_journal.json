@@ -15,6 +15,13 @@
       "when": 1793251378739,
       "tag": "0001_waiter_login_code",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793883774157,
+      "tag": "0002_guest_session_version",
+      "breakpoints": true
     }
   ]
 }

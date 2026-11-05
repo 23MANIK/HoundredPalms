@@ -108,7 +108,11 @@ export async function api<T = unknown>(url: string, init?: { method?: string; bo
     cache: "no-store",
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Something went wrong");
+  if (!res.ok) {
+    const err = new Error((data as { error?: string }).error ?? "Something went wrong") as Error & { status: number };
+    err.status = res.status;
+    throw err;
+  }
   return data as T;
 }
 

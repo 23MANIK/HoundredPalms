@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { decodeIdToken } from "arctic";
 import { getDb } from "@/db";
-import { GUEST_COOKIE, guestTtlSeconds, signSession, upsertGoogleGuest } from "@/lib/auth";
+import { GUEST_COOKIE, guestTtlSeconds, guestSessionToken, upsertGoogleGuest } from "@/lib/auth";
 import { googleClient, googleEnabled, safeNext } from "@/lib/google";
 import { cookieOptions } from "@/lib/http";
 
@@ -16,9 +16,10 @@ export async function GET(req: NextRequest) {
   try {
     const tokens = await googleClient().validateAuthorizationCode(code, verifier);
     const claims = decodeIdToken(tokens.idToken()) as { sub: string; email?: string; name?: string; email_verified?: boolean };
-    const guest = await upsertGoogleGuest(getDb(), { sub: claims.sub, email: claims.email ?? null, name: claims.name ?? "" });
+    const db = getDb();
+    const guest = await upsertGoogleGuest(db, { sub: claims.sub, email: claims.email ?? null, name: claims.name ?? "" });
     const res = NextResponse.redirect(new URL(next, req.url));
-    res.cookies.set(GUEST_COOKIE, await signSession({ kind: "guest", id: guest.id }, guestTtlSeconds), cookieOptions(guestTtlSeconds));
+    res.cookies.set(GUEST_COOKIE, await guestSessionToken(db, guest.id), cookieOptions(guestTtlSeconds));
     for (const c of ["g_state", "g_verifier", "g_next"]) res.cookies.delete(c);
     return res;
   } catch (err) {

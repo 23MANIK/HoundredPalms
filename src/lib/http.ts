@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { getDb, type DB } from "@/db";
 import { DomainError, type GuestActor, type StaffActor, type StaffRole } from "./domain";
-import { GUEST_COOKIE, STAFF_COOKIE, loadGuest, loadStaff, readSession } from "./auth";
+import { GUEST_COOKIE, STAFF_COOKIE, loadGuest, loadStaff, readSession, readSessionClaims } from "./auth";
 
 export function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -43,7 +43,7 @@ export async function readJson<T extends z.ZodTypeAny>(req: NextRequest, schema:
 
 export async function currentGuest(db: DB): Promise<GuestActor | null> {
   const store = await cookies();
-  return loadGuest(db, await readSession(store.get(GUEST_COOKIE)?.value, "guest"));
+  return loadGuest(db, await readSessionClaims(store.get(GUEST_COOKIE)?.value, "guest"));
 }
 
 export async function currentStaff(db: DB): Promise<StaffActor | null> {
@@ -53,7 +53,16 @@ export async function currentStaff(db: DB): Promise<StaffActor | null> {
 
 export async function requireGuest(db: DB): Promise<GuestActor> {
   const g = await currentGuest(db);
-  if (!g) throw new DomainError("Please sign in first", 401);
+  if (!g) {
+    // Clear a cookie that no longer works (for example after the bill was paid).
+    try {
+      const store = await cookies();
+      if (store.get(GUEST_COOKIE)) store.delete(GUEST_COOKIE);
+    } catch {
+      /* not in a route handler */
+    }
+    throw new DomainError("Please sign in first", 401);
+  }
   return g;
 }
 
