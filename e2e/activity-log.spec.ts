@@ -41,16 +41,21 @@ test.describe("Private, readable activity log", () => {
     expect(placed.ok(), await placed.text()).toBeTruthy();
     await guest.dispose();
 
-    // The API never sends the full number.
+    // The activity log never stores the full number, even when the guest typed it in a note.
     const audit = await (await staff.get("/api/staff/audit?limit=200")).text();
     expect(audit, "activity log API").not.toContain(phone);
-    const orders = await (await staff.get("/api/staff/orders")).text();
-    expect(orders, "waiter orders API").not.toContain(phone);
+
+    // Order screens name the guest by a masked number. The note is shown as
+    // the guest wrote it, because staff may need to call them.
+    const { orders } = (await (await staff.get("/api/staff/orders")).json()) as { orders: { id: number; note: string | null; guest: string }[] };
+    const mine = orders.find((o) => o.note === `call me on ${phone}`)!;
+    expect(mine, "the order is listed").toBeTruthy();
+    expect(mine.guest).toBe(`Guest ${masked(phone)}`);
+    expect(JSON.stringify({ ...mine, note: null }), "no other field has the number").not.toContain(phone);
 
     // Waiter screen: a guest with no name shows as "Guest ••••1234".
     await page.goto("/staff/waiter");
     await expect(page.getByText(`Guest ${masked(phone)}`).first()).toBeVisible();
-    await expect(page.locator("main")).not.toContainText(phone);
 
     // Activity log: readable words, masked who, no internal keys.
     await page.goto("/staff/manager");

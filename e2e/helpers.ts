@@ -113,6 +113,17 @@ export const TEST_ROLE_PIN = "4826";
 export const isRemote = () => !!process.env.E2E_BASE_URL;
 
 /**
+ * On a local copy, makes each guest look like a different phone. The server
+ * allows 10 login codes per device an hour, and every local check comes from
+ * 127.0.0.1. The live site takes the address from Vercel, so this does nothing there.
+ */
+export function newDeviceHeaders(): Record<string, string> {
+  if (isRemote()) return {};
+  return { "x-real-ip": `10.${rnd()}.${rnd()}.${rnd()}` };
+}
+const rnd = () => Math.floor(Math.random() * 254) + 1;
+
+/**
  * Signs a guest in through the API the way the app does it: ask for a code
  * "from the waiter", read it from the waiter's code list, verify it, set a name.
  * The guest's cookie lands in `guest`, which can be a page's own request context.
@@ -120,7 +131,7 @@ export const isRemote = () => !!process.env.E2E_BASE_URL;
 export async function guestLogin(guest: APIRequestContext, staff: APIRequestContext, t: TableLink, name: string | null = TEST_GUEST) {
   const phone = randomPhone();
   const token = t.path.split("/").pop()!;
-  const ask = await guest.post("/api/auth/otp/request", { data: { phone, via: "waiter", token } });
+  const ask = await guest.post("/api/auth/otp/request", { data: { phone, via: "waiter", token }, headers: newDeviceHeaders() });
   expect(ask.ok(), `asking for a login code: ${await ask.text()}`).toBeTruthy();
   const codes = (await (await staff.get("/api/staff/login-codes")).json()) as {
     codes: { code: string; phoneLast4: string; table: { number: number }; restaurant: { name: string } }[];
