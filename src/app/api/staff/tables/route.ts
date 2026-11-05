@@ -4,8 +4,8 @@ import { addTable, listTablesWithTabs, todaysSales } from "@/lib/domain";
 import { newQrToken } from "@/lib/crypto";
 
 export const GET = handler(async (_req, db) => {
-  await requireStaff(db);
-  const [tables, sales] = await Promise.all([listTablesWithTabs(db), todaysSales(db)]);
+  const actor = await requireStaff(db);
+  const [tables, sales] = await Promise.all([listTablesWithTabs(db, { includeQr: actor.role === "manager" }), todaysSales(db)]);
   return json({ tables, sales });
 });
 
