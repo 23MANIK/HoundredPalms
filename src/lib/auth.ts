@@ -5,6 +5,8 @@ import { guests, otpCodes, staff, auditLog, diningTables, restaurants } from "@/
 import { DomainError, type GuestActor, type StaffActor } from "./domain";
 import { newOtp, sha256, verifyPin } from "./crypto";
 import { phoneProblem, readPhoneInput } from "./phone";
+import { guestLabel, maskPhone } from "./privacy";
+import type { AuditAction } from "./audit-events";
 
 export const GUEST_COOKIE = "hp_guest";
 export const STAFF_COOKIE = "hp_staff";
@@ -176,8 +178,8 @@ export async function verifyOtp(db: DB, phone: string, code: string): Promise<Gu
     await tx.insert(auditLog).values({
       actorType: "guest",
       actorId: g.id,
-      actorName: phone,
-      action: latest.tableId ? "guest.login_waiter_code" : "guest.login_phone",
+      actorName: maskPhone(phone),
+      action: (latest.tableId ? "guest.login_waiter_code" : "guest.login_phone") satisfies AuditAction,
       tableId: latest.tableId,
     });
     return { kind: "guest" as const, id: g.id, name: g.name || phone };
@@ -189,7 +191,7 @@ export async function upsertGoogleGuest(db: DB, profile: { sub: string; email: s
     let g = await tx.query.guests.findFirst({ where: eq(guests.googleSub, profile.sub) });
     if (!g) [g] = await tx.insert(guests).values({ googleSub: profile.sub, email: profile.email, name: profile.name }).returning();
     else if (profile.name && g.name !== profile.name) await tx.update(guests).set({ name: profile.name, email: profile.email }).where(eq(guests.id, g.id));
-    await tx.insert(auditLog).values({ actorType: "guest", actorId: g.id, actorName: profile.name || profile.email || "Guest", action: "guest.login_google" });
+    await tx.insert(auditLog).values({ actorType: "guest", actorId: g.id, actorName: guestLabel({ name: profile.name, email: profile.email }), action: "guest.login_google" satisfies AuditAction });
     return { kind: "guest", id: g.id, name: profile.name || g.name || profile.email || "Guest" };
   });
 }
@@ -252,7 +254,7 @@ export async function staffLogin(db: DB, phone: string, pin: string): Promise<St
     throw generic;
   }
   await db.update(staff).set({ failedLogins: 0, lockedUntil: null }).where(eq(staff.id, s.id));
-  await db.insert(auditLog).values({ actorType: "staff", actorId: s.id, actorName: s.name, action: "staff.login" });
+  await db.insert(auditLog).values({ actorType: "staff", actorId: s.id, actorName: s.name, action: "staff.login" satisfies AuditAction });
   return { kind: "staff", id: s.id, name: s.name, role: s.role };
 }
 
